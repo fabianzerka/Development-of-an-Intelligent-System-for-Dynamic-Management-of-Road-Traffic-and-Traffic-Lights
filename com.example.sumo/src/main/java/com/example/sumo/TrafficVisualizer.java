@@ -3,28 +3,31 @@ package com.example.sumo;
 import javax.swing.*;
 import java.awt.*;
 import java.util.List;
+import java.util.Map;
 
 public class TrafficVisualizer extends JPanel {
 
     private final List<Road> roads;
     private final List<Intersection> intersections;
     private final List<Vehicle> vehicles;
+    private final Map<String, Road> roadById;
 
     // bounding box i botës (llogaritet një herë në konstruktor)
     private double minX, minY, maxX, maxY;
     private final int margin = 20;
 
-    public TrafficVisualizer(List<Road> roads, List<Intersection> intersections,
-                             List<Vehicle> vehicles) {
-        this.roads = roads;
-        this.intersections = intersections;
-        this.vehicles = vehicles;
-
-        setBackground(Color.WHITE);
-        setPreferredSize(new Dimension(1000, 700));
-
-        computeBounds();
-    }
+    public TrafficVisualizer(List<Road> roads,
+            List<Intersection> intersections,
+            List<Vehicle> vehicles,
+            Map<String,Road> roadById) {
+		this.roads = roads;
+		this.intersections = intersections;
+		this.vehicles = vehicles;
+		this.roadById = roadById;  // O(1) gjetja e rrugës
+		setBackground(Color.WHITE);
+		setPreferredSize(new Dimension(1000, 700));
+		computeBounds();
+	}
 
     private void computeBounds() {
         if (roads.isEmpty() && intersections.isEmpty()) {
@@ -81,20 +84,25 @@ public class TrafficVisualizer extends JPanel {
             g.drawLine(a.x, a.y, b.x, b.y);
         }
 
-        // kryqëzimet
-        g.setColor(Color.DARK_GRAY);
+        // kryqëzimet + semaforët
         for (Intersection inter : intersections) {
             Point p = worldToView(inter.getX(), inter.getY());
+            // pika e kryqëzimit
+            g.setColor(Color.DARK_GRAY);
             g.fillOval(p.x - 3, p.y - 3, 6, 6);
+
+            // semafori (nëse ekziston i pari)
+            if (!inter.getTrafficLights().isEmpty()) {
+                TrafficLight tl = inter.getTrafficLights().get(0);
+                g.setColor(tl.getState() == TrafficLight.State.GREEN ? new Color(0,170,0) : new Color(200,40,40));
+                g.fillOval(p.x - 6, p.y - 10, 8, 8);
+            }
         }
 
-        // makinat (në edge-in aktual)
+        // makinat (gjej rrugën me O(1))
         g.setColor(new Color(30,144,255));
         for (Vehicle v : vehicles) {
-            Road currentRoad = null;
-            for (Road r : roads) {
-                if (r.getId().equals(v.getCurrentEdge())) { currentRoad = r; break; }
-            }
+            Road currentRoad = roadById.get(v.getCurrentEdge());
             if (currentRoad != null) {
                 double t = Math.max(0, Math.min(1, v.getProgress()));
                 double x = currentRoad.getX1() + t * (currentRoad.getX2() - currentRoad.getX1());
@@ -104,7 +112,7 @@ public class TrafficVisualizer extends JPanel {
             }
         }
 
-        // overlay i thjeshtë informativ
+        // overlay informues
         g.setColor(new Color(0,0,0,140));
         String info = "Intersections: " + intersections.size() +
                       " | Roads: " + roads.size() +

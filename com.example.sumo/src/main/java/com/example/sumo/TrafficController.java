@@ -3,40 +3,44 @@ package com.example.sumo;
 import java.util.*;
 
 public class TrafficController {
+    private final Map<String,Road> roadById;
+    private double vehicleSpeed = 0.02; // rrite për lëvizje më të dukshme
 
-    // Koha vizuale për lëvizjen e mjeteve (në Vehicle.step())
-    private double vehicleSpeed = 0.01;
+    public TrafficController(Map<String,Road> roadById) {
+        this.roadById = roadById;
+    }
 
-    /** Vendos GREEN/RED për semaforët sipas flows. */
-    public void updateTraffic(Map<TrafficLight,Integer> measuredFlows, List<Intersection> intersections){
-        // nëse kemi 1 semafor për kryqëzim, le të jetë GREEN kur flow > 0
+    public void setVehicleSpeed(double s) { if (s > 0) vehicleSpeed = s; }
+
+    /** Vendos GREEN/RED (aktualisht lëmë jeshile default). */
+    public void updateTraffic(List<Intersection> intersections){
         for (Intersection inter : intersections) {
-            List<TrafficLight> tls = inter.getTrafficLights();
-            if (tls.isEmpty()) continue;
-
-            if (tls.size() == 1) {
-                TrafficLight tl = tls.get(0);
-                int f = measuredFlows.getOrDefault(tl, 1); // default 1 që të kalojnë mjetet
-                if (f > 0) tl.setGreen(); else tl.setRed();
-            } else {
-                // zgjedh GREEN për atë me flow më të madh
-                TrafficLight best = null; int bestF = Integer.MIN_VALUE;
-                for (TrafficLight tl : tls) {
-                    int f = measuredFlows.getOrDefault(tl, 0);
-                    if (f > bestF) { bestF = f; best = tl; }
-                }
-                for (TrafficLight tl : tls) {
-                    if (tl == best) tl.setGreen(); else tl.setRed();
-                }
+            if (!inter.getTrafficLights().isEmpty()) {
+                inter.getTrafficLights().get(0).setGreen(); // thjesht jeshile tani
             }
         }
     }
 
-    /** Thjesht rrit progresin e çdo mjeti. */
+    /** Lëviz mjetet, por ndal kur ka semafor të kuq shumë afër. */
     public void stepVehicles(List<Vehicle> vehicles){
         for (Vehicle v : vehicles) {
             v.setSpeed(vehicleSpeed);
-            v.step();
+            if (!shouldStop(v)) v.step();
         }
+    }
+
+    private boolean shouldStop(Vehicle v) {
+        Road r = roadById.get(v.getCurrentEdge());
+        if (r == null) return false;
+        // gjej semaforin në fundin e rrugës
+        Intersection end = r.getEndIntersection();
+        if (end == null || end.getTrafficLights().isEmpty()) return false;
+        TrafficLight tl = end.getTrafficLights().get(0);
+
+        // distanca (në njësi ekrani) deri në fund të rrugës
+        double distToEnd = (1.0 - v.getProgress()) * r.getLength();
+        double stopDist = 12.0; // piksele ~ 12px para fund-it
+
+        return tl.getState() == TrafficLight.State.RED && distToEnd < stopDist;
     }
 }

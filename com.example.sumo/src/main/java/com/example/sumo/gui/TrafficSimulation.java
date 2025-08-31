@@ -5,33 +5,42 @@ import com.example.sumo.*;
 import javax.swing.*;
 import java.awt.*;
 import java.util.*;
+import java.util.List;
+import java.util.ArrayList;
 
 public class TrafficSimulation {
 
     public static void main(String[] args){
         SwingUtilities.invokeLater(() -> {
-            String base = "src/main/resources/sumo_output/";
-            String net = base + "osm.net.xml";
+            String base   = "src/main/resources/sumo_output/";
+            String net    = base + "osm.net.xml";
             String routes = base + "routes.rou.xml";
-            String edgeData = base + "edgeData.xml";
 
-            // 1) rrjeti
+            // 1) Lexo rrjetin
             SumoNetworkReader.readNetwork(net);
-            java.util.List<Intersection> intersections = new ArrayList<>(SumoNetworkReader.getIntersections());
-            java.util.List<Road> roads = new ArrayList<>(SumoNetworkReader.getRoads());
+            List<Intersection> intersections = new ArrayList<>(SumoNetworkReader.getIntersections());
+            List<Road> roads = new ArrayList<>(SumoNetworkReader.getRoads());
+            Map<String, Road> roadById = SumoNetworkReader.getRoadById();
 
-            // 2) semaforët (1 për kryqëzim)
+            // 2) Krijo nga 1 semafor për çdo kryqëzim
             for (Intersection inter : intersections) {
                 TrafficLight tl = new TrafficLight("TL_" + inter.getId(), inter);
                 inter.addTrafficLight(tl);
             }
 
-            // 3) mjetet
-            java.util.List<Vehicle> vehicles = SumoVehiclesReader.readVehicles(routes);
+            // 3) Lexo mjetet
+            List<Vehicle> vehicles = SumoVehiclesReader.readVehicles(routes);
 
-            // 4) controller + vizualizimi
-            TrafficController controller = new TrafficController();
-            TrafficVisualizer panel = new TrafficVisualizer(roads, intersections, vehicles);
+            // Info në konsolë
+            System.out.println("Intersections loaded = " + intersections.size());
+            System.out.println("Roads loaded         = " + roads.size());
+            System.out.println("Vehicles loaded      = " + vehicles.size());
+
+            // 4) Controller + panel (me roadById për lookup O(1))
+            TrafficController controller = new TrafficController(roadById);
+            controller.setVehicleSpeed(0.03); // lëvizje më e dukshme
+
+            TrafficVisualizer panel = new TrafficVisualizer(roads, intersections, vehicles, roadById);
 
             JFrame frame = new JFrame("Traffic Simulation");
             frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
@@ -41,29 +50,10 @@ public class TrafficSimulation {
             frame.setLocationRelativeTo(null);
             frame.setVisible(true);
 
-            // 5) timer: përditëso semaforët + lëviz makinat + repaint
+            // 5) Timer: përditëso semaforët + lëviz makinat + repaint
             final int dtMs = 40;
             new javax.swing.Timer(dtMs, e -> {
-                // flows (nëse skedari mungon, thjesht bëhet hartë bosh)
-                Map<String,Integer> flowsByEdge = SumoReader.readTrafficFlows(edgeData);
-
-                // kthe në Map<TrafficLight, Integer>
-                Map<TrafficLight,Integer> measured = new HashMap<>();
-                for (Intersection inter : intersections) {
-                    for (TrafficLight tl : inter.getTrafficLights()) {
-                        int f = 0;
-                        // shembull: përdor flow të rrugës së parë hyrëse (nëse ka)
-                        if (!inter.getIncoming().isEmpty()) {
-                            String edgeId = inter.getIncoming().get(0).getId();
-                            f = flowsByEdge.getOrDefault(edgeId, 1); // 1 default që të jetë jeshile
-                        } else {
-                            f = 1;
-                        }
-                        measured.put(tl, f);
-                    }
-                }
-
-                controller.updateTraffic(measured, intersections);
+                controller.updateTraffic(intersections); // aktualisht i mban "green" (mund të zgjerohet me fase)
                 controller.stepVehicles(vehicles);
                 panel.repaint();
             }).start();

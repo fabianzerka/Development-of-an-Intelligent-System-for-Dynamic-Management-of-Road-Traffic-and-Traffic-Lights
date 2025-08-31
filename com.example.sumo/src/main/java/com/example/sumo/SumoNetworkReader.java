@@ -1,107 +1,72 @@
 package com.example.sumo;
 
 import org.w3c.dom.*;
-import javax.xml.parsers.*;
-import java.io.*;
+import javax.xml.parsers.DocumentBuilderFactory;
+import java.io.File;
 import java.util.*;
-import java.util.zip.GZIPInputStream;
 
 public class SumoNetworkReader {
 
-    public static Map<String, Intersection> intersections = new HashMap<>();
-    public static Map<String, Road> roads = new HashMap<>();
+    private static final Map<String, Intersection> intersections = new HashMap<>();
+    private static final Map<String, Road> roads = new HashMap<>();
 
     public static void readNetwork(String filePath) {
+        intersections.clear();
+        roads.clear();
         try {
-            DocumentBuilderFactory dbFactory = DocumentBuilderFactory.newInstance();
-            DocumentBuilder dBuilder = dbFactory.newDocumentBuilder();
-
-            InputStream input;
-            if (filePath.endsWith(".gz")) {
-                input = new GZIPInputStream(new FileInputStream(new File(filePath)));
-            } else {
-                input = new FileInputStream(new File(filePath));
-            }
-
-            Document doc = dBuilder.parse(input);
+            Document doc = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(new File(filePath));
             doc.getDocumentElement().normalize();
 
-            // --- Load junctions as intersections ---
-            NodeList junctions = doc.getElementsByTagName("junction");
-            for (int i = 0; i < junctions.getLength(); i++) {
-                Element j = (Element) junctions.item(i);
-                Intersection inter = new Intersection(j.getAttribute("id"));
-
-                // Optional: store coordinates if present
-                if (j.hasAttribute("x") && j.hasAttribute("y")) {
-                    inter.setX(Double.parseDouble(j.getAttribute("x")));
-                    inter.setY(Double.parseDouble(j.getAttribute("y")));
-                }
-
-                intersections.put(inter.getId(), inter);
+            // *** FIX 1: SUMO përdor <junction>, jo <node>
+            NodeList juncList = doc.getElementsByTagName("junction");
+            for (int i = 0; i < juncList.getLength(); i++) {
+                Element j = (Element) juncList.item(i);
+                String id = j.getAttribute("id");
+                double x = parseD(j.getAttribute("x"), 0);
+                double y = parseD(j.getAttribute("y"), 0);
+                Intersection inter = new Intersection(id);
+                inter.setCoordinates(x, y);
+                intersections.put(id, inter);
             }
 
-            // --- Load edges as roads ---
-            NodeList edges = doc.getElementsByTagName("edge");
-            for (int i = 0; i < edges.getLength(); i++) {
-                Element edge = (Element) edges.item(i);
-                String id = edge.getAttribute("id");
+            // edges
+            NodeList edgeList = doc.getElementsByTagName("edge");
+            for (int i = 0; i < edgeList.getLength(); i++) {
+                Element e = (Element) edgeList.item(i);
+                // hiq rrugët "internal"
+                if ("internal".equals(e.getAttribute("function"))) continue;
 
-                NodeList lanes = edge.getElementsByTagName("lane");
-                double startX = 0, startY = 0, endX = 0, endY = 0;
-                if (lanes.getLength() > 0) {
-                    Element lane = (Element) lanes.item(0);
-                    String[] points = lane.getAttribute("shape").split(" ");
-                    String[] start = points[0].split(",");
-                    String[] end = points[points.length - 1].split(",");
-                    startX = Double.parseDouble(start[0]);
-                    startY = Double.parseDouble(start[1]);
-                    endX = Double.parseDouble(end[0]);
-                    endY = Double.parseDouble(end[1]);
-                }
+                String id = e.getAttribute("id");
+                String fromId = e.getAttribute("from");
+                String toId   = e.getAttribute("to");
 
-                // Find nearest intersections
-                Intersection from = findNearest(startX, startY);
-                Intersection to = findNearest(endX, endY);
+                Intersection from = intersections.get(fromId);
+                Intersection to   = intersections.get(toId);
+                if (from == null || to == null) continue;
 
-                Road r = new Road(id, from, to, (int) startX, (int) startY, (int) endX, (int) endY);
+                int x1 = (int)Math.round(from.getX());
+                int y1 = (int)Math.round(from.getY());
+                int x2 = (int)Math.round(to.getX());
+                int y2 = (int)Math.round(to.getY());
+
+                Road r = new Road(id, from, to, x1, y1, x2, y2);
                 roads.put(id, r);
-
-                if (from != null) from.addOutgoingRoad(r);
-                if (to != null) to.addIncomingRoad(r);
+                from.addOutgoing(r);
+                to.addIncoming(r);
             }
 
-            System.out.println("Loaded " + roads.size() + " roads and " + intersections.size() + " intersections.");
+            System.out.println("[SUMO] Loaded network: junctions=" + intersections.size() + ", edges=" + roads.size());
 
-        } catch (Exception e) {
-            e.printStackTrace();
+        } catch (Exception ex) {
+            ex.printStackTrace();
         }
     }
 
-    // --- Find nearest intersection by coordinates ---
-    public static Intersection findNearest(double x, double y) {
-        Intersection nearest = null;
-        double minDist = Double.MAX_VALUE;
-
-        for (Intersection inter : intersections.values()) {
-            double dx = inter.getX() - x;
-            double dy = inter.getY() - y;
-            double dist = Math.sqrt(dx * dx + dy * dy);
-
-            if (dist < minDist) {
-                minDist = dist;
-                nearest = inter;
-            }
-        }
-
-        return nearest;
+    private static double parseD(String s, double def) {
+        try { return Double.parseDouble(s); } catch (Exception e) { return def; }
     }
 
-    public static Collection<Intersection> getIntersections() {
-        return intersections.values();
-    }
-
-    public static Collection<Road> getRoads() {
-        return roads.values();
-    }
+    public static Collection<Intersection> getIntersections() { return intersections.values(); }
+    public static Collection<Road> getRoads() { return roads.values(); }
+    public static Map<String, Road> getRoadById() { return Collections.unmodifiableMap(roads); }
 }

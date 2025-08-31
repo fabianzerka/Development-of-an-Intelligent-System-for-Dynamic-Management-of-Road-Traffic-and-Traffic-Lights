@@ -4,29 +4,25 @@ public class TrafficLight {
 
     public enum State { RED, GREEN }
 
-    private String id;
-    private State state;
-    private Intersection intersection; // lidhja me kryqëzimin
+    private final String id;
+    private final Intersection intersection;
+    private State state = State.RED;
 
     public TrafficLight(String id, Intersection intersection) {
         this.id = id;
-        this.state = State.RED;
         this.intersection = intersection;
     }
 
-    public void setState(State state) {
-        this.state = state;
-    }
+    // kontroll i thjeshtë; mund të zgjerohet me faza/drejtim
+    public void setState(State s) { this.state = s; }
+    public void setGreen() { this.state = State.GREEN; }
+    public void setRed() { this.state = State.RED; }
+    public State getState() { return state; }
 
-    public State getState() {
-        return state;
-    }
+    public String getId() { return id; }
+    public Intersection getIntersection() { return intersection; }
 
-    public String getId() {
-        return id;
-    }
-
-    public Intersection getIntersection() {
-        return intersection;
-    }
+    // version minimal për kompatibilitet me thirrje të mëparshme
+    public boolean isGreenFor(Road r) { return state == State.GREEN; }
+    public void update(double dtSeconds) { /* no-op në këtë MWP */ }
 }

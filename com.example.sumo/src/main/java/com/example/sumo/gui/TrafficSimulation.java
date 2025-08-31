@@ -1,64 +1,72 @@
 package com.example.sumo.gui;
 
-import com.example.sumo.*; 
+import com.example.sumo.*;
 
 import javax.swing.*;
-import javax.swing.Timer; 
+import java.awt.*;
 import java.util.*;
-//test
+
 public class TrafficSimulation {
 
     public static void main(String[] args){
-        SumoNetworkReader.readNetwork("src/main/resources/sumo_output/osm.net.xml");
-        List<Intersection> intersections = new ArrayList<>(SumoNetworkReader.getIntersections());
-        List<Road> roads = new ArrayList<>(SumoNetworkReader.getRoads());
-        
+        SwingUtilities.invokeLater(() -> {
+            String base = "src/main/resources/sumo_output/";
+            String net = base + "osm.net.xml";
+            String routes = base + "routes.rou.xml";
+            String edgeData = base + "edgeData.xml";
 
-        // krijo semaforë
-        for(Intersection inter: intersections){
-            if(!inter.getIncoming().isEmpty()){
-                inter.addTrafficLight(new TrafficLight("TL_"+inter.getId(), inter));
+            // 1) rrjeti
+            SumoNetworkReader.readNetwork(net);
+            java.util.List<Intersection> intersections = new ArrayList<>(SumoNetworkReader.getIntersections());
+            java.util.List<Road> roads = new ArrayList<>(SumoNetworkReader.getRoads());
+
+            // 2) semaforët (1 për kryqëzim)
+            for (Intersection inter : intersections) {
+                TrafficLight tl = new TrafficLight("TL_" + inter.getId(), inter);
+                inter.addTrafficLight(tl);
             }
-        }
-        
-        System.out.println("=== Intersections and Traffic Lights ===");
-        for(Intersection inter : intersections) {
-            System.out.println("Intersection: " + inter.getId() + " incoming=" + inter.getIncoming().size() + " outgoing=" + inter.getOutgoing().size());
-            for(TrafficLight tl : inter.getTrafficLights()) {
-                System.out.println("  TrafficLight id=" + tl.getId());
-            }
-        }
 
-        
-        List<Vehicle> vehicles = SumoVehiclesReader.readVehicles("src/main/resources/sumo_output/routes.rou.xml");
-        TrafficController controller = new TrafficController();
+            // 3) mjetet
+            java.util.List<Vehicle> vehicles = SumoVehiclesReader.readVehicles(routes);
 
-        TrafficVisualizer panel = new TrafficVisualizer(roads, intersections, vehicles, controller);
-        JFrame frame = new JFrame("SUMO Traffic Simulation");
-        frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        frame.setSize(800,600);
-        frame.add(panel);
-        frame.setVisible(true);
+            // 4) controller + vizualizimi
+            TrafficController controller = new TrafficController();
+            TrafficVisualizer panel = new TrafficVisualizer(roads, intersections, vehicles);
 
-        // Timer për lëvizje dhe green wave
-        Timer timer = new Timer(50, e->{
-            for(Vehicle v: vehicles) v.move();
+            JFrame frame = new JFrame("Traffic Simulation");
+            frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+            frame.setLayout(new BorderLayout());
+            frame.add(panel, BorderLayout.CENTER);
+            frame.pack();
+            frame.setLocationRelativeTo(null);
+            frame.setVisible(true);
 
-            // lexon fluksin nga edgeData.xml
-            Map<String,Integer> flows = SumoReader.readTrafficFlows("src/main/resources/sumo_output/edgeData.xml");
-            Map<TrafficLight,Integer> measured = new HashMap<>();
-            for(Intersection inter:intersections){
-                for(TrafficLight tl: inter.getTrafficLights()){
-                    if(!inter.getIncoming().isEmpty()){
-                        String edgeId = inter.getIncoming().get(0).getId();
-                        measured.put(tl, flows.getOrDefault(edgeId,0));
+            // 5) timer: përditëso semaforët + lëviz makinat + repaint
+            final int dtMs = 40;
+            new javax.swing.Timer(dtMs, e -> {
+                // flows (nëse skedari mungon, thjesht bëhet hartë bosh)
+                Map<String,Integer> flowsByEdge = SumoReader.readTrafficFlows(edgeData);
+
+                // kthe në Map<TrafficLight, Integer>
+                Map<TrafficLight,Integer> measured = new HashMap<>();
+                for (Intersection inter : intersections) {
+                    for (TrafficLight tl : inter.getTrafficLights()) {
+                        int f = 0;
+                        // shembull: përdor flow të rrugës së parë hyrëse (nëse ka)
+                        if (!inter.getIncoming().isEmpty()) {
+                            String edgeId = inter.getIncoming().get(0).getId();
+                            f = flowsByEdge.getOrDefault(edgeId, 1); // 1 default që të jetë jeshile
+                        } else {
+                            f = 1;
+                        }
+                        measured.put(tl, f);
                     }
                 }
-            }
 
-            controller.updateTraffic(measured, intersections);
-            panel.repaint();
+                controller.updateTraffic(measured, intersections);
+                controller.stepVehicles(vehicles);
+                panel.repaint();
+            }).start();
         });
-        timer.start();
     }
 }

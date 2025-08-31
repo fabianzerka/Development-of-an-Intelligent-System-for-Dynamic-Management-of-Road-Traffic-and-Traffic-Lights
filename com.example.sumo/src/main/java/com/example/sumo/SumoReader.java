@@ -1,38 +1,38 @@
 package com.example.sumo;
 
 import org.w3c.dom.*;
-import javax.xml.parsers.*;
+import javax.xml.parsers.DocumentBuilderFactory;
 import java.io.File;
 import java.util.*;
 
 public class SumoReader {
 
-    /**
-     * Lexon fluksin e makinave për çdo edge nga edgeData.xml
-     * Kthen Map<edgeId, numri i makinave>
-     */
+    /** Kthen Map<edgeId, count> bazuar në atributet e disponueshme. */
     public static Map<String,Integer> readTrafficFlows(String filePath){
         Map<String,Integer> flows = new HashMap<>();
         try{
-            DocumentBuilderFactory dbFactory = DocumentBuilderFactory.newInstance();
-            DocumentBuilder dBuilder = dbFactory.newDocumentBuilder();
-            Document doc = dBuilder.parse(new File(filePath));
+            Document doc = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(new File(filePath));
             doc.getDocumentElement().normalize();
 
-            NodeList edges = doc.getElementsByTagName("edge");
-            for(int i=0;i<edges.getLength();i++){
-                Element edge = (Element) edges.item(i);
-                String id = edge.getAttribute("id");
-                int vehCount = 0;
-                if(edge.hasAttribute("vehNr")){
-                    vehCount = Integer.parseInt(edge.getAttribute("vehNr"));
-                }
-                flows.put(id, vehCount);
+            NodeList edgeNodes = doc.getElementsByTagName("edge");
+            for (int i = 0; i < edgeNodes.getLength(); i++) {
+                Element e = (Element) edgeNodes.item(i);
+                String id = e.getAttribute("id");
+                int val = 0;
+                // përdor çfarëdo atribute që ekzistojnë
+                if (e.hasAttribute("nVehContrib")) val = parseI(e.getAttribute("nVehContrib"), 0);
+                else if (e.hasAttribute("nSamples")) val = parseI(e.getAttribute("nSamples"), 0);
+                else if (e.hasAttribute("entered")) val = parseI(e.getAttribute("entered"), 0);
+                else if (e.hasAttribute("vehNr")) val = parseI(e.getAttribute("vehNr"), 0);
+                flows.put(id, val);
             }
-
         }catch(Exception e){
             e.printStackTrace();
         }
         return flows;
+    }
+
+    private static int parseI(String s, int def){
+        try { return Integer.parseInt(s); } catch (Exception e) { return def; }
     }
 }

@@ -1,46 +1,39 @@
 package com.example.sumo;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 
 public class Intersection {
 
-    private String id;
-    private double x = 0; // X coordinate
-    private double y = 0; // Y coordinate
+    private final String id;
+    private double x; // koordinata nga osm.net.xml
+    private double y;
 
-    private List<Road> incoming = new ArrayList<>();
-    private List<Road> outgoing = new ArrayList<>();
-    private List<TrafficLight> trafficLights = new ArrayList<>();
+    private final List<Road> incoming = new ArrayList<>();
+    private final List<Road> outgoing = new ArrayList<>();
+    private final List<TrafficLight> trafficLights = new ArrayList<>();
 
-    public Intersection(String id) {
-        this.id = id;
-    }
+    public Intersection(String id) { this.id = id; }
 
     public String getId() { return id; }
 
-    public void setX(double x) { this.x = x; }
-    public void setY(double y) { this.y = y; }
+    public void setCoordinates(double x, double y) { this.x = x; this.y = y; }
     public double getX() { return x; }
     public double getY() { return y; }
 
-    public void addIncomingRoad(Road r) { incoming.add(r); }
-    public void addOutgoingRoad(Road r) { outgoing.add(r); }
+    public void addIncoming(Road r) { if (r != null) incoming.add(r); }
+    public void addOutgoing(Road r) { if (r != null) outgoing.add(r); }
 
-    public List<Road> getIncoming() { return incoming; }
-    public List<Road> getOutgoing() { return outgoing; }
+    public List<Road> getIncoming() { return Collections.unmodifiableList(incoming); }
+    public List<Road> getOutgoing() { return Collections.unmodifiableList(outgoing); }
 
     public void addTrafficLight(TrafficLight tl) {
-        trafficLights.add(tl);
+        if (tl != null) trafficLights.add(tl);
     }
 
-    public List<TrafficLight> getTrafficLights() {
-        return trafficLights;
-    }
+    public List<TrafficLight> getTrafficLights() { return Collections.unmodifiableList(trafficLights); }
 
-    // për green wave: distanca midis semaforëve të rrugës kryesore
-    public double getDistanceToPrevious(TrafficLight prev) {
-        if(prev == null) return 0;
-        // shembull: vendosim një distance fikse, mund ta bëjmë sipas koordinatave të rrugës
-        return 100.0;
-    }
+    // ndihmës (për algoritme green-wave në të ardhmen)
+    public double getDistanceToPrevious(TrafficLight prev) { return 100.0; }
 }

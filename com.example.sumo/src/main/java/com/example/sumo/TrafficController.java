@@ -1,49 +1,42 @@
 package com.example.sumo;
 
-import javax.swing.Timer;
 import java.util.*;
 
 public class TrafficController {
 
-    private final int MIN_GREEN = 2;
-    private final int MAX_GREEN = 6;
-    private Map<TrafficLight,Integer> greenTimers = new HashMap<>();
-    private double averageSpeed = 0.02; // units/sec
+    // Koha vizuale për lëvizjen e mjeteve (në Vehicle.step())
+    private double vehicleSpeed = 0.01;
 
+    /** Vendos GREEN/RED për semaforët sipas flows. */
     public void updateTraffic(Map<TrafficLight,Integer> measuredFlows, List<Intersection> intersections){
+        // nëse kemi 1 semafor për kryqëzim, le të jetë GREEN kur flow > 0
+        for (Intersection inter : intersections) {
+            List<TrafficLight> tls = inter.getTrafficLights();
+            if (tls.isEmpty()) continue;
 
-        List<TrafficLight> allLights = new ArrayList<>(measuredFlows.keySet());
-        allLights.sort((a,b)->measuredFlows.get(b)-measuredFlows.get(a));
-
-        for(TrafficLight tl: allLights){
-            int flow = measuredFlows.get(tl);
-            int greenTime = Math.min(MAX_GREEN, Math.max(MIN_GREEN, flow/2));
-            greenTimers.put(tl,greenTime);
-            tl.setState(TrafficLight.State.RED);
-        }
-
-        // green wave
-        for(List<TrafficLight> corridor: getMainCorridors(intersections)){
-            for(int i=0;i<corridor.size();i++){
-                TrafficLight tl = corridor.get(i);
-                double distance = tl.getIntersection().getDistanceToPrevious(i>0? corridor.get(i-1):null);
-                int delay = (int)(distance/averageSpeed*1000);
-
-                Timer timer = new Timer(delay,e->tl.setState(TrafficLight.State.GREEN));
-                timer.setRepeats(false);
-                timer.start();
+            if (tls.size() == 1) {
+                TrafficLight tl = tls.get(0);
+                int f = measuredFlows.getOrDefault(tl, 1); // default 1 që të kalojnë mjetet
+                if (f > 0) tl.setGreen(); else tl.setRed();
+            } else {
+                // zgjedh GREEN për atë me flow më të madh
+                TrafficLight best = null; int bestF = Integer.MIN_VALUE;
+                for (TrafficLight tl : tls) {
+                    int f = measuredFlows.getOrDefault(tl, 0);
+                    if (f > bestF) { bestF = f; best = tl; }
+                }
+                for (TrafficLight tl : tls) {
+                    if (tl == best) tl.setGreen(); else tl.setRed();
+                }
             }
         }
     }
 
-    private List<List<TrafficLight>> getMainCorridors(List<Intersection> intersections){
-        List<List<TrafficLight>> corridors = new ArrayList<>();
-        for(Intersection inter: intersections){
-            if(!inter.getIncoming().isEmpty() && !inter.getTrafficLights().isEmpty())
-                corridors.add(inter.getTrafficLights());
+    /** Thjesht rrit progresin e çdo mjeti. */
+    public void stepVehicles(List<Vehicle> vehicles){
+        for (Vehicle v : vehicles) {
+            v.setSpeed(vehicleSpeed);
+            v.step();
         }
-        return corridors;
     }
-
-    public int getGreenTime(TrafficLight tl){ return greenTimers.getOrDefault(tl,MIN_GREEN); }
 }

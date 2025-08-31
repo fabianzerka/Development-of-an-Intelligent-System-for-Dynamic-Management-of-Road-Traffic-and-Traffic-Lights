@@ -7,35 +7,40 @@ public class Vehicle {
 
     private final String id;
     private final List<String> routeEdges;
-    private int currentIndex = 0;
-    private double progress = 0.0; // 0..1 përgjatë edge-it aktual
-    private double speed = 0.01;   // "units" për tick (vizuale)
+    private int edgeIndex = 0;     // cili edge në radhë
+    private double sOnEdge = 0.0;  // pozicioni në edge (në të njëjtat njësi si koordinatat)
+    private double speed = 12.0;   // “pixel/s” (rrite/ul për efekt vizual)
 
-    public Vehicle(String id, String[] routeEdges) {
-        this(id, Arrays.asList(routeEdges));
-    }
-
-    public Vehicle(String id, List<String> routeEdges) {
-        this.id = id;
-        this.routeEdges = routeEdges;
-    }
+    public Vehicle(String id, String[] routeEdges) { this(id, Arrays.asList(routeEdges)); }
+    public Vehicle(String id, List<String> routeEdges) { this.id = id; this.routeEdges = routeEdges; }
 
     public String getId() { return id; }
-    public String getCurrentEdge() { return routeEdges.get(currentIndex); }
-    public double getProgress() { return progress; }
-
+    public String getCurrentEdge() { return routeEdges.get(edgeIndex); }
+    public int getEdgeIndex() { return edgeIndex; }
+    public double getProgress() { return 0.0; } // NUK përdoret më, lëre për kompatibilitet
     public void setSpeed(double s) { if (s > 0) this.speed = s; }
 
-    // thirret në çdo tick të timer-it
-    public void step() {
-        progress += speed;
-        if (progress >= 1.0) {
-            progress = 0.0;
-            if (currentIndex < routeEdges.size() - 1) currentIndex++;
+    /** Lëviz me dt (sekonda). Funksionon në bazë të gjatësisë së rrugës. */
+    public void advance(double dt, Road currentRoad) {
+        if (currentRoad == null) return;
+        sOnEdge += speed * dt;
+        double L = currentRoad.getLength();
+        while (sOnEdge >= L && edgeIndex < routeEdges.size()-1) {
+            sOnEdge -= L;           // kalon te edge-i tjetër
+            edgeIndex++;
+            // L i ri do llogaritet nga kontrollori në thirrjen tjetër
+            break;
         }
     }
 
+    /** Kthe progres vizual 0..1 vetëm për vizatim (opsionale). */
+    public double getProgressOn(Road r) {
+        if (r == null) return 0;
+        double L = r.getLength();
+        return L <= 0 ? 0 : Math.max(0, Math.min(1, sOnEdge / L));
+    }
+
     public boolean arrived() {
-        return currentIndex >= routeEdges.size() - 1 && progress >= 0.999;
+        return edgeIndex >= routeEdges.size()-1 && sOnEdge <= 0.001;
     }
 }

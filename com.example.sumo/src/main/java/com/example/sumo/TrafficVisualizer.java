@@ -104,7 +104,7 @@ public class TrafficVisualizer extends JPanel {
         for (Vehicle v : vehicles) {
             Road currentRoad = roadById.get(v.getCurrentEdge());
             if (currentRoad != null) {
-                double t = Math.max(0, Math.min(1, v.getProgress()));
+                double t = v.getProgressOn(currentRoad); // 0..1
                 double x = currentRoad.getX1() + t * (currentRoad.getX2() - currentRoad.getX1());
                 double y = currentRoad.getY1() + t * (currentRoad.getY2() - currentRoad.getY1());
                 Point p = worldToView(x, y);

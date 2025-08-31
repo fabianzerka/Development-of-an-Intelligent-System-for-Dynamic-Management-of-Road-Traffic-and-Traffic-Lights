@@ -38,7 +38,7 @@ public class TrafficSimulation {
 
             // 4) Controller + panel (me roadById për lookup O(1))
             TrafficController controller = new TrafficController(roadById);
-            controller.setVehicleSpeed(0.03); // lëvizje më e dukshme
+            controller.setVehicleSpeed(25.0); // lëvizje më e dukshme
 
             TrafficVisualizer panel = new TrafficVisualizer(roads, intersections, vehicles, roadById);
 
@@ -53,8 +53,7 @@ public class TrafficSimulation {
             // 5) Timer: përditëso semaforët + lëviz makinat + repaint
             final int dtMs = 40;
             new javax.swing.Timer(dtMs, e -> {
-                controller.updateTraffic(intersections); // aktualisht i mban "green" (mund të zgjerohet me fase)
-                controller.stepVehicles(vehicles);
+                controller.tick(dtMs / 1000.0, intersections, vehicles);
                 panel.repaint();
             }).start();
         });

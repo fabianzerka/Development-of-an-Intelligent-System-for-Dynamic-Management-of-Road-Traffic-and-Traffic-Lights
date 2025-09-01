@@ -5,8 +5,19 @@ import javax.xml.parsers.DocumentBuilderFactory;
 import java.io.File;
 import java.util.*;
 
+/**
+ * Reads vehicle routes from a SUMO {@code routes.rou.xml} file and converts
+ * them into {@link Vehicle} instances used by the simulation.
+ */
 public class SumoVehiclesReader {
-
+	
+    /**
+     * Parses a routes file and creates a list of vehicles with their edge
+     * sequences.
+     *
+     * @param filePath path to the {@code routes.rou.xml} file
+     * @return list of vehicles defined in the file
+     */
     public static List<Vehicle> readVehicles(String filePath){
         List<Vehicle> vehicles = new ArrayList<>();
         try {

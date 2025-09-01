@@ -6,11 +6,22 @@ import java.awt.geom.Point2D;
 import java.io.File;
 import java.util.*;
 
+/**
+ * Utility responsible for loading a SUMO network definition ({@code osm.net.xml})
+ * into in-memory {@link Intersection} and {@link Road} objects. The reader
+ * parses junctions and edges, extracting polyline geometry where available.
+ */
 public class SumoNetworkReader {
 
     private static final Map<String, Intersection> intersections = new HashMap<>();
     private static final Map<String, Road> roads = new HashMap<>();
 
+    /**
+     * Reads a SUMO network file and populates the internal collections of
+     * intersections and roads. Existing data is cleared before loading.
+     *
+     * @param filePath path to the {@code osm.net.xml} network file
+     */
     public static void readNetwork(String filePath) {
         intersections.clear();
         roads.clear();
@@ -18,7 +29,7 @@ public class SumoNetworkReader {
             Document doc = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(new File(filePath));
             doc.getDocumentElement().normalize();
 
-            // junctions
+            // ---- junctions ----
             NodeList juncList = doc.getElementsByTagName("junction");
             for (int i = 0; i < juncList.getLength(); i++) {
                 Element j = (Element) juncList.item(i);
@@ -30,7 +41,7 @@ public class SumoNetworkReader {
                 intersections.put(id, inter);
             }
 
-            // edges
+            // ---- edges ----
             NodeList edgeList = doc.getElementsByTagName("edge");
             for (int i = 0; i < edgeList.getLength(); i++) {
                 Element e = (Element) edgeList.item(i);
@@ -48,7 +59,7 @@ public class SumoNetworkReader {
 
                 Road r = new Road(id, from, to, x1, y1, x2, y2);
 
-                // >>> NEW: merre lane e parë dhe shape e saj si poliline
+                // take shape of first lane if available
                 NodeList lanes = e.getElementsByTagName("lane");
                 if (lanes.getLength() > 0) {
                     Element lane0 = (Element) lanes.item(0);
@@ -70,10 +81,18 @@ public class SumoNetworkReader {
         }
     }
 
+    /** Parses a string as double, returning {@code def} when parsing fails. */
     private static double parseD(String s, double def) {
         try { return Double.parseDouble(s); } catch (Exception e) { return def; }
     }
 
+
+    /**
+     * Converts a SUMO lane {@code shape} attribute into a list of points.
+     *
+     * @param shapeAttr value of the {@code shape} attribute
+     * @return list of points or {@code null} if parsing fails
+     */
     private static List<Point2D> parseShape(String shapeAttr) {
         if (shapeAttr == null || shapeAttr.isEmpty()) return null;
         String[] toks = shapeAttr.trim().split("\\s+");
@@ -90,7 +109,12 @@ public class SumoNetworkReader {
         return pts;
     }
 
+    /** @return all intersections in the loaded network */
     public static Collection<Intersection> getIntersections() { return intersections.values(); }
+
+    /** @return all roads in the loaded network */
     public static Collection<Road> getRoads() { return roads.values(); }
+
+    /** @return unmodifiable mapping from road id to road instance */
     public static Map<String, Road> getRoadById() { return Collections.unmodifiableMap(roads); }
 }

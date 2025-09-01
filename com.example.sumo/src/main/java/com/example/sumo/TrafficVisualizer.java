@@ -7,6 +7,11 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * Swing component responsible for rendering the road network, vehicles and
+ * traffic light states. The panel supports zooming and panning to explore the
+ * simulation visually.
+ */
 public class TrafficVisualizer extends JPanel {
 
     private final List<Road> roads;
@@ -29,6 +34,9 @@ public class TrafficVisualizer extends JPanel {
     private static final int margin = 20;
     private static final int QUEUE_WIN = 40; // px pranë semaforit për numërim radhe
 
+    /**
+     * Creates a visualizer for the given network and controller.
+     */
     public TrafficVisualizer(List<Road> roads,
                              List<Intersection> intersections,
                              List<Vehicle> vehicles,
@@ -57,6 +65,7 @@ public class TrafficVisualizer extends JPanel {
 
     /* ===================  BOUNDS & FIT  =================== */
 
+    /** Calculates world-space bounds based on roads and intersections. */
     private void computeBounds() {
         if (roads.isEmpty() && intersections.isEmpty()) {
             minX = minY = 0; maxX = maxY = 1;
@@ -83,6 +92,7 @@ public class TrafficVisualizer extends JPanel {
         if (minY == maxY) maxY = minY + 1;
     }
 
+    /** Adjusts the view transform so that the entire network fits the panel. */
     private void fitToScreen() {
         int W = Math.max(1, getWidth());
         int H = Math.max(1, getHeight());
@@ -102,6 +112,7 @@ public class TrafficVisualizer extends JPanel {
 
     /* ===================  INTERAKSIONET  =================== */
 
+    /** Wires up mouse listeners for zooming and panning interactions. */
     private void initInteractions() {
         addMouseWheelListener(e -> {
             double factor = (e.getWheelRotation() < 0) ? 1.1 : 1.0 / 1.1;
@@ -130,6 +141,7 @@ public class TrafficVisualizer extends JPanel {
         addMouseMotionListener(ma);
     }
 
+    /** Zooms the view around the specified point. */
     private void zoomAt(Point pivotView, double factor) {
         double newScale = clamp(viewScale * factor, minScale, maxScale);
         if (Math.abs(newScale - viewScale) < 1e-12) return;
@@ -148,13 +160,14 @@ public class TrafficVisualizer extends JPanel {
         return Math.max(lo, Math.min(hi, v));
     }
 
+    /** Converts world coordinates to panel coordinates. */
     private Point worldToView(double x, double y) {
         int vx = (int)Math.round(offsetX + x * viewScale);
         int vy = (int)Math.round(offsetY + y * viewScale);
         return new Point(vx, vy);
     }
 
-    /* ===================  VIZATIMI  =================== */
+    /* ===================  DRAWING  =================== */
 
     @Override
     protected void paintComponent(Graphics g0) {
@@ -184,7 +197,7 @@ public class TrafficVisualizer extends JPanel {
             }
         }
 
-        // harta e radhëve (edgeId -> count) për këtë frame
+        // queue counts per edge for this frame
         Map<String, Integer> qMap = new HashMap<>();
         for (Vehicle v : vehicles) {
             Road cr = roadById.get(v.getCurrentEdge());
@@ -194,7 +207,7 @@ public class TrafficVisualizer extends JPanel {
             if (distToEnd <= QUEUE_WIN) qMap.merge(cr.getId(), 1, Integer::sum);
         }
 
-        // shiritat e kuq të radhëve
+        // red bars representing waiting vehicles near lights
         g.setStroke(new BasicStroke(6f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
         g.setColor(new Color(220, 50, 50, 160));
         for (Intersection inter : intersections) {
@@ -214,7 +227,7 @@ public class TrafficVisualizer extends JPanel {
         }
         g.setStroke(new BasicStroke(2f));
 
-        // makinat
+        // vehicles
         g.setColor(new Color(30,144,255));
         for (Vehicle v : vehicles) {
             Road r = roadById.get(v.getCurrentEdge());
@@ -227,7 +240,7 @@ public class TrafficVisualizer extends JPanel {
             }
         }
 
-        // overlay
+        // overlay information
         g.setColor(new Color(0,0,0,140));
         String info = "Intersections: " + intersections.size() +
                       " | Roads: " + roads.size() +
@@ -239,7 +252,7 @@ public class TrafficVisualizer extends JPanel {
         g.drawString(info, 10, getHeight() - 10);
     }
 
-    // pikë përgjatë polilines së rrugës në distancën s (nga fillimi)
+    /** Returns a point along the polyline of road {@code r} at distance {@code s}. */
     private java.awt.geom.Point2D pointAlong(Road r, double s) {
         java.util.List<java.awt.geom.Point2D> pts = r.getShape();
         double remain = s;

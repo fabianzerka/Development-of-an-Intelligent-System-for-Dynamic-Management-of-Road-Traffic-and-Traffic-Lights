@@ -8,9 +8,17 @@ import javax.swing.Timer;
 import java.awt.*;
 import java.nio.file.Path;
 import java.util.*;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 
+/**
+ * Entry point for launching the Swing based traffic simulation demo. The class
+ * wires together network parsing, vehicle loading, controller logic and the
+ * visualizer panel to create an interactive simulation.
+ */
 public class TrafficSimulation {
 
+    /** Starts the graphical simulation. */
     public static void main(String[] args){
         SwingUtilities.invokeLater(() -> {
             String base   = "src/main/resources/sumo_output/";
@@ -96,7 +104,8 @@ public class TrafficSimulation {
             // export CSV
             exportCsv.addActionListener(ae -> {
                 try {
-                    Path out = Path.of("results", "metrics.csv");
+                    // mund të vendosësh edhe një timestamp në emër nëse do
+                    Path out = Paths.get("results", "metrics.csv");
                     CsvExporter.exportVehicleMetrics(out, controller.getFinishedVehiclesSnapshot());
                     JOptionPane.showMessageDialog(frame,
                             "Metrics exported to:\n" + out.toAbsolutePath(),
@@ -108,7 +117,7 @@ public class TrafficSimulation {
                             "Export CSV", JOptionPane.ERROR_MESSAGE);
                 }
             });
-
+            
             frame.pack();
             frame.setLocationRelativeTo(null);
             frame.setVisible(true);

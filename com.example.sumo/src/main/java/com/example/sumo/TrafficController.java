@@ -2,6 +2,11 @@ package com.example.sumo;
 
 import java.util.*;
 
+/**
+ * Core simulation engine that advances vehicles, cycles traffic lights and
+ * gathers statistics. The controller operates in discrete time steps provided
+ * via {@link #tick(double, List, List)}.
+ */
 public class TrafficController {
     private final Map<String, Road> roadById;
 
@@ -20,14 +25,31 @@ public class TrafficController {
     private static final double MIN_GAP  = 12.0;
     private static final double QUEUE_WIN = 40.0;
 
+    /** Constructs a controller bound to the provided road map. */
     public TrafficController(Map<String, Road> roadById) { this.roadById = roadById; }
+
+    /** Sets the desired cruising speed for vehicles (visual units per second). */
     public void setVehicleSpeed(double s) { if (s > 0) vehicleSpeed = s; }
 
+    /** @return current simulation time in seconds */
     public double getSimTime(){ return simTime; }
-    public int getCompletedCount(){ return completed; }
-    public double getAvgWaitCompleted(){ return completed == 0 ? 0.0 : totalWaitCompleted / completed; }
-    public List<Vehicle> getFinishedVehiclesSnapshot(){ return Collections.unmodifiableList(finishedVehicles); }
 
+    /** @return number of vehicles that have finished their routes */
+    public int getCompletedCount(){ return completed; }
+
+    /** @return average waiting time of completed vehicles */
+    public double getAvgWaitCompleted(){ return completed == 0 ? 0.0 : totalWaitCompleted / completed; }
+
+    /** Snapshot of finished vehicles for reporting or exporting. */
+    public List<Vehicle> getFinishedVehiclesSnapshot(){ return Collections.unmodifiableList(finishedVehicles); }
+    
+    /**
+     * Advances the entire simulation by {@code dt} seconds.
+     *
+     * @param dt            time step in seconds
+     * @param intersections all intersections in the network
+     * @param vehicles      active vehicles in the simulation
+     */
     public void tick(double dt, List<Intersection> intersections, List<Vehicle> vehicles) {
         simTime += dt;
 
@@ -88,9 +110,21 @@ public class TrafficController {
                 toRemove.add(v);
             }
         }
+        
+     // 3.5) shëno lëvizjen reale për llogaritjen e ndalesave
+        for (Vehicle v : vehicles) {
+            double prev = prevPos.getOrDefault(v, 0.0);
+            boolean advanced = v.getSOnEdge() > prev + 1e-6;
+            v.markAdvanced(advanced);
+        }
+
         if (!toRemove.isEmpty()) vehicles.removeAll(toRemove);
     }
-
+    
+    /**
+     * Determines whether a vehicle must stop before entering an intersection
+     * because of a red signal on the current road.
+     */
     private boolean mustStopAtRed(Vehicle v, Road r) {
         Intersection end = r.getEndIntersection();
         if (end == null || end.getTrafficLights().isEmpty()) return false;

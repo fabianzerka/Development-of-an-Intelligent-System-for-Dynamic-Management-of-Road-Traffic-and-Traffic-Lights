@@ -10,26 +10,26 @@ public class TrafficLight {
     private final String id;
     private final Intersection inter;
 
-    // Dy grupe fazash: horizontale (group0) vs vertikale (group1)
+    // Grupi 0 (horizontal) dhe grupi 1 (vertical) – auto-popullohen nga incoming
     private final List<Road> group0 = new ArrayList<>();
     private final List<Road> group1 = new ArrayList<>();
 
-    private int phase = 0;          // 0 => group0 jeshile, 1 => group1 jeshile
+    private int phase = 0;           // 0 => group0 jeshile, 1 => group1 jeshile
     private double timer = 0.0;
-    private double greenDur = 10.0; // sekonda; rregullo sipas dëshirës
+    private double greenDur = 10.0;  // sekonda (mund të ndryshohet në runtime)
 
     public TrafficLight(String id, Intersection inter) {
         this.id = id;
         this.inter = inter;
-        autoGroupIncoming(inter); // grupim automatik N–S / E–W sipas këndit
+        autoGroupIncoming(inter);
     }
 
     public String getId() { return id; }
     public Intersection getIntersection() { return inter; }
 
-    /** Thirret çdo tick (dt në sekonda) për të ndërruar fazat. */
+    /** Thirret çdo tick (dt në sekonda). */
     public void update(double dt) {
-        if (group0.isEmpty() && group1.isEmpty()) return; // s’ka hyrje për t’u kontrolluar
+        if (group0.isEmpty() && group1.isEmpty()) return;
         timer += dt;
         if (timer >= greenDur) {
             timer = 0.0;
@@ -40,30 +40,31 @@ public class TrafficLight {
     /** Jeshile për këtë rrugë hyrëse? */
     public boolean isGreenFor(Road incoming) {
         if (incoming == null) return true;
-        if (group0.isEmpty() && group1.isEmpty()) return true; // pa kufizime
+        if (group0.isEmpty() && group1.isEmpty()) return true;
         return (phase == 0 ? group0 : group1).contains(incoming);
     }
 
-    /** E kuqe për këtë rrugë hyrëse? */
-    public boolean isRedFor(Road incoming) {
-        return !isGreenFor(incoming);
-    }
+    public boolean isRedFor(Road incoming) { return !isGreenFor(incoming); }
 
-    /**
-     * Alias i përgjithshëm për panele që duan vetëm një ngjyrë “totale”.
-     * Kthen GREEN nëse të paktën një nga rrugët hyrëse të këtij kryqëzimi është jeshile në fazën aktuale,
-     * përndryshe RED.
-     */
+    /** Alias i përgjithshëm për vizualizim (jeshile nëse të paktën një hyrje e lejuar). */
     public State getState() {
-        if (inter == null) return State.GREEN;
-        if (inter.getIncoming().isEmpty()) return State.GREEN; // s’ka hyrje → mos e blloko
-        for (Road r : inter.getIncoming()) {
-            if (isGreenFor(r)) return State.GREEN;
-        }
+        if (inter == null || inter.getIncoming().isEmpty()) return State.GREEN;
+        for (Road r : inter.getIncoming()) if (isGreenFor(r)) return State.GREEN;
         return State.RED;
     }
 
-    // --- Grupim automatik: horizontale në group0, vertikale në group1 ---
+    // ==== Ndihmëse për adaptimin ====
+    public int groupOf(Road r) {
+        if (r == null) return -1;
+        if (group0.contains(r)) return 0;
+        if (group1.contains(r)) return 1;
+        return -1;
+    }
+    public int getPhase() { return phase; }
+    public void forcePhase(int p) { if (p == 0 || p == 1) { phase = p; timer = 0; } }
+    public void setGreenDuration(double seconds) { if (seconds > 0) this.greenDur = seconds; }
+
+    // ==== Grupimi automatik N–S / E–W sipas këndit të rrugës ====
     private void autoGroupIncoming(Intersection inter) {
         if (inter == null) return;
         for (Road r : inter.getIncoming()) {
@@ -71,11 +72,5 @@ public class TrafficLight {
             double dy = r.getY2() - r.getY1();
             if (Math.abs(dx) >= Math.abs(dy)) group0.add(r); else group1.add(r);
         }
-        // nëse vetëm një grup u mbush, funksionon si “jeshile gjithmonë” për atë drejtim
-    }
-
-    // Opsionale: nëse do të ndryshosh kohëzgjatjen nga jashtë
-    public void setGreenDuration(double seconds) {
-        if (seconds > 0) this.greenDur = seconds;
     }
 }

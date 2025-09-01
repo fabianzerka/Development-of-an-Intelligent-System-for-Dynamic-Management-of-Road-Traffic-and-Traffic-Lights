@@ -2,6 +2,7 @@ package com.example.sumo;
 
 import javax.swing.*;
 import java.awt.*;
+import java.awt.event.*;
 import java.util.List;
 import java.util.Map;
 
@@ -12,22 +13,45 @@ public class TrafficVisualizer extends JPanel {
     private final List<Vehicle> vehicles;
     private final Map<String, Road> roadById;
 
-    // bounding box i botës (llogaritet një herë në konstruktor)
+    // kufijtë e botës (nga rrjeti)
     private double minX, minY, maxX, maxY;
+
+    // zoom & pan
+    private double viewScale = 1.0;    // shkalla aktuale (px për njësi bote)
+    private double baseScale = 1.0;    // shkalla “fit to screen”
+    private double offsetX = 0.0;      // translacioni X (px)
+    private double offsetY = 0.0;      // translacioni Y (px)
+    private double minScale, maxScale; // kufij zoom
+    private Point lastDrag = null;     // për pan
+
     private final int margin = 20;
 
     public TrafficVisualizer(List<Road> roads,
-            List<Intersection> intersections,
-            List<Vehicle> vehicles,
-            Map<String,Road> roadById) {
-		this.roads = roads;
-		this.intersections = intersections;
-		this.vehicles = vehicles;
-		this.roadById = roadById;  // O(1) gjetja e rrugës
-		setBackground(Color.WHITE);
-		setPreferredSize(new Dimension(1000, 700));
-		computeBounds();
-	}
+                             List<Intersection> intersections,
+                             List<Vehicle> vehicles,
+                             Map<String,Road> roadById) {
+        this.roads = roads;
+        this.intersections = intersections;
+        this.vehicles = vehicles;
+        this.roadById = roadById;
+
+        setBackground(Color.WHITE);
+        setPreferredSize(new Dimension(1000, 700));
+        setDoubleBuffered(true);
+
+        computeBounds();
+        fitToScreen();       // vendos baseScale/offset fillimisht
+        initInteractions();  // mouse wheel + pan + reset
+        // rifit kur ndryshon madhësia
+        addComponentListener(new ComponentAdapter() {
+            @Override public void componentResized(ComponentEvent e) {
+                fitToScreen();
+                repaint();
+            }
+        });
+    }
+
+    /* ===================  BOUNDS & FIT  =================== */
 
     private void computeBounds() {
         if (roads.isEmpty() && intersections.isEmpty()) {
@@ -55,19 +79,98 @@ public class TrafficVisualizer extends JPanel {
         if (minY == maxY) maxY = minY + 1;
     }
 
-    private Point worldToView(double x, double y) {
-        int W = Math.max(1, getWidth()  - 2*margin);
-        int H = Math.max(1, getHeight() - 2*margin);
-        double sx = W / (maxX - minX);
-        double sy = H / (maxY - minY);
-        double s  = Math.min(sx, sy); // ruaj raportet
+    /** Qendro dhe skalo rrjetin që të zërë panelin me margin. */
+    private void fitToScreen() {
+        int W = Math.max(1, getWidth());
+        int H = Math.max(1, getHeight());
+        double sx = (W - 2.0 * margin) / (maxX - minX);
+        double sy = (H - 2.0 * margin) / (maxY - minY);
+        baseScale = Math.max(1e-6, Math.min(sx, sy));
+        viewScale = baseScale;
 
-        // opsionale: invertim i boshtit Y nëse do orientim "grafik"
-        double vx = margin + (x - minX) * s;
-        double vy = margin + (y - minY) * s;
+        // qendrimi në ekran: worldToView(x) = offset + x * viewScale
+        double contentW = (maxX - minX) * viewScale;
+        double contentH = (maxY - minY) * viewScale;
+        offsetX = (W - contentW) / 2.0 - minX * viewScale;
+        offsetY = (H - contentH) / 2.0 - minY * viewScale;
 
-        return new Point((int)Math.round(vx), (int)Math.round(vy));
+        // kufij të arsyeshëm për zoom (mund të ndryshohen sipas dëshirës)
+        minScale = baseScale * 0.2;
+        maxScale = baseScale * 20.0;
     }
+
+    /* ===================  INTERAKSIONET  =================== */
+
+    private void initInteractions() {
+        // Mouse wheel zoom rreth kursorit
+        addMouseWheelListener(e -> {
+            // wheelRotation > 0 = scroll poshtë (zoom out)
+            double factor = (e.getWheelRotation() < 0) ? 1.1 : 1.0 / 1.1;
+            zoomAt(e.getPoint(), factor);
+        });
+
+        // Pan me drag (butoni majtas)
+        MouseAdapter ma = new MouseAdapter() {
+            @Override public void mousePressed(MouseEvent e) {
+                if (SwingUtilities.isLeftMouseButton(e)) lastDrag = e.getPoint();
+            }
+            @Override public void mouseDragged(MouseEvent e) {
+                if (lastDrag != null && SwingUtilities.isLeftMouseButton(e)) {
+                    Point now = e.getPoint();
+                    double dx = now.x - lastDrag.x;
+                    double dy = now.y - lastDrag.y;
+                    offsetX += dx;
+                    offsetY += dy;
+                    lastDrag = now;
+                    repaint();
+                }
+            }
+            @Override public void mouseReleased(MouseEvent e) { lastDrag = null; }
+
+            // Double-click për reset (fit to screen)
+            @Override public void mouseClicked(MouseEvent e) {
+                if (e.getClickCount() == 2) {
+                    fitToScreen();
+                    repaint();
+                }
+            }
+        };
+        addMouseListener(ma);
+        addMouseMotionListener(ma);
+    }
+
+    /** Zoom rreth pikës së kursorit (e mban pikën “nën” kursor pas zoomit). */
+    private void zoomAt(Point pivotView, double factor) {
+        double newScale = clamp(viewScale * factor, minScale, maxScale);
+        if (Math.abs(newScale - viewScale) < 1e-12) return;
+
+        // konverto piksel -> koordinatë bote për pivotin
+        double wx = (pivotView.x - offsetX) / viewScale;
+        double wy = (pivotView.y - offsetY) / viewScale;
+
+        viewScale = newScale;
+
+        // rregullo offset që (wx,wy) të mbetet nën kursor
+        offsetX = pivotView.x - wx * viewScale;
+        offsetY = pivotView.y - wy * viewScale;
+
+        repaint();
+    }
+
+    private static double clamp(double v, double lo, double hi) {
+        return Math.max(lo, Math.min(hi, v));
+    }
+
+    /* ===================  TRANSFORMIMET  =================== */
+
+    private Point worldToView(double x, double y) {
+        // Nëse do orientim “hartë” (Y lart), zëvendëso offsetY + y*scale me offsetY + (maxY - (y - minY + minY))*scale ...
+        int vx = (int)Math.round(offsetX + x * viewScale);
+        int vy = (int)Math.round(offsetY + y * viewScale);
+        return new Point(vx, vy);
+    }
+
+    /* ===================  VIZATIMI  =================== */
 
     @Override
     protected void paintComponent(Graphics g0) {
@@ -87,11 +190,9 @@ public class TrafficVisualizer extends JPanel {
         // kryqëzimet + semaforët
         for (Intersection inter : intersections) {
             Point p = worldToView(inter.getX(), inter.getY());
-            // pika e kryqëzimit
             g.setColor(Color.DARK_GRAY);
             g.fillOval(p.x - 3, p.y - 3, 6, 6);
 
-            // semafori (nëse ekziston i pari)
             if (!inter.getTrafficLights().isEmpty()) {
                 TrafficLight tl = inter.getTrafficLights().get(0);
                 g.setColor(tl.getState() == TrafficLight.State.GREEN ? new Color(0,170,0) : new Color(200,40,40));
@@ -99,12 +200,12 @@ public class TrafficVisualizer extends JPanel {
             }
         }
 
-        // makinat (gjej rrugën me O(1))
+        // makinat
         g.setColor(new Color(30,144,255));
         for (Vehicle v : vehicles) {
             Road currentRoad = roadById.get(v.getCurrentEdge());
             if (currentRoad != null) {
-                double t = v.getProgressOn(currentRoad); // 0..1
+                double t = v.getProgressOn(currentRoad);
                 double x = currentRoad.getX1() + t * (currentRoad.getX2() - currentRoad.getX1());
                 double y = currentRoad.getY1() + t * (currentRoad.getY2() - currentRoad.getY1());
                 Point p = worldToView(x, y);

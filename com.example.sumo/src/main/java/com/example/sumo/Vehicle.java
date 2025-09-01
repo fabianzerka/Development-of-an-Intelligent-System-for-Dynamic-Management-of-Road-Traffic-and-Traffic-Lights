@@ -7,40 +7,47 @@ public class Vehicle {
 
     private final String id;
     private final List<String> routeEdges;
-    private int edgeIndex = 0;     // cili edge në radhë
-    private double sOnEdge = 0.0;  // pozicioni në edge (në të njëjtat njësi si koordinatat)
-    private double speed = 12.0;   // “pixel/s” (rrite/ul për efekt vizual)
+    private int edgeIndex = 0;     // cili edge është aktiv
+    private double sOnEdge = 0.0;  // pozicioni (në piksele të hartës) përgjatë edge-it
+    private double speed = 20.0;   // piksele / sek
+
+    // metrikë
+    private double waitingTime = 0.0;
 
     public Vehicle(String id, String[] routeEdges) { this(id, Arrays.asList(routeEdges)); }
     public Vehicle(String id, List<String> routeEdges) { this.id = id; this.routeEdges = routeEdges; }
 
     public String getId() { return id; }
     public String getCurrentEdge() { return routeEdges.get(edgeIndex); }
-    public int getEdgeIndex() { return edgeIndex; }
-    public double getProgress() { return 0.0; } // NUK përdoret më, lëre për kompatibilitet
+
     public void setSpeed(double s) { if (s > 0) this.speed = s; }
 
-    /** Lëviz me dt (sekonda). Funksionon në bazë të gjatësisë së rrugës. */
+    /** Lëviz me dt në rrugën aktuale; kalon në tjetrën kur mbaron. */
     public void advance(double dt, Road currentRoad) {
         if (currentRoad == null) return;
         sOnEdge += speed * dt;
-        double L = currentRoad.getLength();
-        while (sOnEdge >= L && edgeIndex < routeEdges.size()-1) {
-            sOnEdge -= L;           // kalon te edge-i tjetër
+        double L = Math.max(1e-6, currentRoad.getLength());
+        if (sOnEdge >= L && edgeIndex < routeEdges.size() - 1) {
+            sOnEdge -= L;
             edgeIndex++;
-            // L i ri do llogaritet nga kontrollori në thirrjen tjetër
-            break;
         }
     }
 
-    /** Kthe progres vizual 0..1 vetëm për vizatim (opsionale). */
+    /** Progres 0..1 për vizatim në rrugën e dhënë. */
     public double getProgressOn(Road r) {
-        if (r == null) return 0;
-        double L = r.getLength();
-        return L <= 0 ? 0 : Math.max(0, Math.min(1, sOnEdge / L));
+        if (r == null) return 0.0;
+        double L = Math.max(1e-6, r.getLength());
+        double t = sOnEdge / L;
+        if (t < 0) t = 0;
+        if (t > 1) t = 1;
+        return t;
     }
 
     public boolean arrived() {
-        return edgeIndex >= routeEdges.size()-1 && sOnEdge <= 0.001;
+        return edgeIndex >= routeEdges.size() - 1 && sOnEdge <= 1.0;
     }
+
+    // ==== metrikë ====
+    public void addWaiting(double dt) { waitingTime += dt; }
+    public double getWaitingTime() { return waitingTime; }
 }

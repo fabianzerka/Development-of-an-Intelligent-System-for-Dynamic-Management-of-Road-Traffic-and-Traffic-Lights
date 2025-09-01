@@ -55,7 +55,7 @@ public class TrafficSimulation {
             new javax.swing.Timer(dtMs, e -> {
                 controller.tick(dtMs / 1000.0, intersections, vehicles);
                 panel.repaint();
-            }).start();
+            }).start();	
         });
     }
 }

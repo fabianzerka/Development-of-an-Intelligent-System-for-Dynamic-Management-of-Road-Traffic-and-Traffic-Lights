@@ -182,9 +182,12 @@ public class TrafficVisualizer extends JPanel {
         g.setColor(Color.LIGHT_GRAY);
         g.setStroke(new BasicStroke(2f));
         for (Road r : roads) {
-            Point a = worldToView(r.getX1(), r.getY1());
-            Point b = worldToView(r.getX2(), r.getY2());
-            g.drawLine(a.x, a.y, b.x, b.y);
+            java.util.List<java.awt.geom.Point2D> pts = r.getShape();
+            for (int i = 0; i < pts.size() - 1; i++) {
+                Point a = worldToView(pts.get(i).getX(),     pts.get(i).getY());
+                Point b = worldToView(pts.get(i+1).getX(),   pts.get(i+1).getY());
+                g.drawLine(a.x, a.y, b.x, b.y);
+            }
         }
 
         // kryqëzimet + semaforët
@@ -203,12 +206,12 @@ public class TrafficVisualizer extends JPanel {
         // makinat
         g.setColor(new Color(30,144,255));
         for (Vehicle v : vehicles) {
-            Road currentRoad = roadById.get(v.getCurrentEdge());
-            if (currentRoad != null) {
-                double t = v.getProgressOn(currentRoad);
-                double x = currentRoad.getX1() + t * (currentRoad.getX2() - currentRoad.getX1());
-                double y = currentRoad.getY1() + t * (currentRoad.getY2() - currentRoad.getY1());
-                Point p = worldToView(x, y);
+            Road r = roadById.get(v.getCurrentEdge());
+            if (r == null) continue;
+            double t = v.getProgressOn(r); // 0..1
+            java.awt.geom.Point2D wp = pointAlong(r, t * r.getLength()); // distancë përgjatë polilines
+            if (wp != null) {
+                Point p = worldToView(wp.getX(), wp.getY());
                 g.fillRect(p.x - 3, p.y - 3, 6, 6);
             }
         }
@@ -220,4 +223,22 @@ public class TrafficVisualizer extends JPanel {
                       " | Vehicles: " + vehicles.size();
         g.drawString(info, 10, getHeight() - 10);
     }
+    
+    private java.awt.geom.Point2D pointAlong(Road r, double s) {
+        java.util.List<java.awt.geom.Point2D> pts = r.getShape();
+        double remain = s;
+        for (int i = 0; i < pts.size() - 1; i++) {
+            java.awt.geom.Point2D a = pts.get(i), b = pts.get(i+1);
+            double seg = a.distance(b);
+            if (remain <= seg) {
+                double u = seg < 1e-9 ? 0 : remain / seg;
+                double x = a.getX() + u * (b.getX() - a.getX());
+                double y = a.getY() + u * (b.getY() - a.getY());
+                return new java.awt.geom.Point2D.Double(x, y);
+            }
+            remain -= seg;
+        }
+        return pts.isEmpty() ? null : pts.get(pts.size() - 1);
+    }
+
 }

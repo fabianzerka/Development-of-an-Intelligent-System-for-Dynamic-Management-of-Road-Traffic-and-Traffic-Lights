@@ -16,7 +16,7 @@ public class TrafficLight {
 
     private int phase = 0;           // 0 => group0 jeshile, 1 => group1 jeshile
     private double timer = 0.0;
-    private double greenDur = 10.0;  // sekonda (mund të ndryshohet në runtime)
+    private double greenDur = 8.0;  // sekonda (mund të ndryshohet në runtime)
 
     public TrafficLight(String id, Intersection inter) {
         this.id = id;

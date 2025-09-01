@@ -10,7 +10,8 @@ public class TrafficController {
     private double vehicleSpeed = 25.0;   // piksele/sek
     private final double STOP_DIST   = 18.0; // px para kryqëzimit
     private final double QUEUE_WIN   = 40.0; // px nga fundi i rrugës për të numëruar “në radhë”
-
+    private double simTime = 0.0;
+    
     public TrafficController(Map<String, Road> roadById) {
         this.roadById = roadById;
     }
@@ -19,6 +20,7 @@ public class TrafficController {
 
     /** Tick i vetëm: përditëson semaforët, adaptimin dhe lëviz mjetet. */
     public void tick(double dt, List<Intersection> intersections, List<Vehicle> vehicles) {
+    	simTime += dt;
         // 1) përditëso timer-in e semaforëve
         for (Intersection inter : intersections) {
             if (!inter.getTrafficLights().isEmpty()) {
@@ -28,30 +30,9 @@ public class TrafficController {
 
         // 2) ADAPTIVE: mat radhët sipas afërsisë me kryqëzimin dhe përshtat fazën/greenDur
         for (Intersection inter : intersections) {
-            if (inter.getTrafficLights().isEmpty()) continue;
-            TrafficLight tl = inter.getTrafficLights().get(0);
-
-            int[] q = new int[]{0, 0}; // q[0] dhe q[1] për grupet
-            for (Road r : inter.getIncoming()) {
-                int gi = tl.groupOf(r);
-                if (gi < 0) continue;
-                double L = r.getLength();
-                for (Vehicle v : vehicles) {
-                    if (!r.getId().equals(v.getCurrentEdge())) continue;
-                    double t = v.getProgressOn(r); // 0..1
-                    double distToEnd = (1.0 - t) * L;
-                    if (distToEnd <= QUEUE_WIN) q[gi]++;
-                }
+            if (!inter.getTrafficLights().isEmpty()) {
+                inter.getTrafficLights().get(0).update(dt);
             }
-            // zgjidh phased fitues nëse diferenca është domethënëse
-            int win = (q[0] >= q[1]) ? 0 : 1;
-            if (Math.abs(q[0] - q[1]) >= 2 && tl.getPhase() != win) {
-                tl.forcePhase(win); // kalim i menjëhershëm dhe reset i timer-it
-            }
-            // skalimi i greenDur me madhësinë e radhës (deri 30s)
-            double newGreen = 6.0 + 1.5 * Math.max(q[0], q[1]);
-            if (newGreen > 30.0) newGreen = 30.0;
-            tl.setGreenDuration(newGreen);
         }
 
         // 3) lëviz mjetet; nëse e kuqe dhe afër, akumulo pritje
@@ -60,8 +41,9 @@ public class TrafficController {
             if (r == null) continue;
             v.setSpeed(vehicleSpeed);
 
+            // ndalo vetëm nëse është e kuqe pranë kryqëzimit
             if (mustStopAtRed(v, r)) {
-                v.addWaiting(dt);
+                v.addWaiting(dt); // nëse po mban metrika; përndryshe mund ta heqësh këtë rresht
                 continue;
             }
             v.advance(dt, r);
@@ -77,6 +59,8 @@ public class TrafficController {
         double t = v.getProgressOn(r);
         double distToEnd = (1.0 - t) * L;
 
-        return tl.isRedFor(r) && distToEnd < STOP_DIST;
+        // Prag dinamik: mos i ndal shumë larg në edge të shkurtra
+        double stopDistPx = Math.max(4.0, Math.min(18.0, 0.15 * L)); // 4..18 px, ose 15% e gjatësisë
+        return tl.isRedFor(r) && distToEnd < stopDistPx;
     }
 }

@@ -10,12 +10,21 @@ public class Vehicle {
     private int edgeIndex = 0;     // cili edge është aktiv
     private double sOnEdge = 0.0;  // pozicioni (në piksele të hartës) përgjatë edge-it
     private double speed = 20.0;   // piksele / sek
-
+    private final double depart;
+    
     // metrikë
     private double waitingTime = 0.0;
 
-    public Vehicle(String id, String[] routeEdges) { this(id, Arrays.asList(routeEdges)); }
-    public Vehicle(String id, List<String> routeEdges) { this.id = id; this.routeEdges = routeEdges; }
+    public Vehicle(String id, List<String> routeEdges, double depart) {
+        this.id = id; this.routeEdges = routeEdges; this.depart = Math.max(0, depart);
+    }
+
+    // Konstruktori ekzistues të thërrasë këtë:
+    public Vehicle(String id, List<String> routeEdges) { this(id, routeEdges, 0.0); }
+    public Vehicle(String id, String[] routeEdges) { this(id, Arrays.asList(routeEdges), 0.0); }
+
+	public double getDepart() { return depart; }
+	public boolean isActive(double simTime) { return simTime >= depart; }
 
     public String getId() { return id; }
     public String getCurrentEdge() { return routeEdges.get(edgeIndex); }

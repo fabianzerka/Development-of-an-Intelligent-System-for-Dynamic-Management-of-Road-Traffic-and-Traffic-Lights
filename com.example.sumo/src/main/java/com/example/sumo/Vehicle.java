@@ -63,4 +63,11 @@ public class Vehicle {
     public boolean arrived() {
         return edgeIndex >= routeEdges.size() - 1 && sOnEdge >= Math.max(1.0, 0.99 * Math.max(1e-6, sOnEdge));
     }
+    
+ // --- pos. along current edge (for car-following) ---
+    public double getSOnEdge() { return sOnEdge; }
+    public void setSOnEdge(double s) { this.sOnEdge = Math.max(0, s); }
+    // (opsionale) nëse të duhet shpejtësia e tanishme
+    public double getSpeed() { return speed; }
+
 }

@@ -12,6 +12,7 @@ public class TrafficVisualizer extends JPanel {
     private final List<Intersection> intersections;
     private final List<Vehicle> vehicles;
     private final Map<String, Road> roadById;
+    private final TrafficController controller;
 
     // kufijtë e botës (nga rrjeti)
     private double minX, minY, maxX, maxY;
@@ -27,13 +28,16 @@ public class TrafficVisualizer extends JPanel {
     private final int margin = 20;
 
     public TrafficVisualizer(List<Road> roads,
-                             List<Intersection> intersections,
-                             List<Vehicle> vehicles,
-                             Map<String,Road> roadById) {
-        this.roads = roads;
-        this.intersections = intersections;
-        this.vehicles = vehicles;
-        this.roadById = roadById;
+            List<Intersection> intersections,
+            List<Vehicle> vehicles,
+            Map<String,Road> roadById,
+            TrafficController controller) {
+    	
+		this.roads = roads;
+		this.intersections = intersections;
+		this.vehicles = vehicles;
+		this.roadById = roadById;
+		this.controller = controller;
 
         setBackground(Color.WHITE);
         setPreferredSize(new Dimension(1000, 700));
@@ -220,8 +224,13 @@ public class TrafficVisualizer extends JPanel {
         g.setColor(new Color(0,0,0,140));
         String info = "Intersections: " + intersections.size() +
                       " | Roads: " + roads.size() +
-                      " | Vehicles: " + vehicles.size();
+                      " | Active: " + vehicles.size();
+        if (controller != null) {
+            info += " | Completed: " + controller.getCompletedCount() +
+                    String.format(" | Avg wait(comp): %.1fs", controller.getAvgWaitCompleted());
+        }
         g.drawString(info, 10, getHeight() - 10);
+
     }
     
     private java.awt.geom.Point2D pointAlong(Road r, double s) {

@@ -1,5 +1,6 @@
 package com.example.sumo;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -10,7 +11,10 @@ public class TrafficController {
     private double vehicleSpeed = 25.0;   // piksele/sek
     private final double STOP_DIST   = 18.0; // px para kryqëzimit
     private final double QUEUE_WIN   = 40.0; // px nga fundi i rrugës për të numëruar “në radhë”
-    private double simTime = 0.0;
+
+	private double simTime = 0.0;
+	private int completed = 0;
+	private double totalWaitCompleted = 0.0;
     
     public TrafficController(Map<String, Road> roadById) {
         this.roadById = roadById;
@@ -36,18 +40,25 @@ public class TrafficController {
         }
 
         // 3) lëviz mjetet; nëse e kuqe dhe afër, akumulo pritje
+        List<Vehicle> toRemove = new ArrayList<>();
         for (Vehicle v : vehicles) {
             Road r = roadById.get(v.getCurrentEdge());
             if (r == null) continue;
-            v.setSpeed(vehicleSpeed);
 
-            // ndalo vetëm nëse është e kuqe pranë kryqëzimit
-            if (mustStopAtRed(v, r)) {
-                v.addWaiting(dt); // nëse po mban metrika; përndryshe mund ta heqësh këtë rresht
-                continue;
-            }
+            v.setSpeed(vehicleSpeed);
+            if (mustStopAtRed(v, r)) { v.addWaiting(dt); continue; }
+
             v.advance(dt, r);
+
+            if (v.arrived() && !v.isFinished()) {
+                v.markFinished(simTime);
+                completed++;
+                totalWaitCompleted += v.getWaitingTime();
+                toRemove.add(v);
+            }
         }
+
+        if (!toRemove.isEmpty()) vehicles.removeAll(toRemove);
     }
 
     private boolean mustStopAtRed(Vehicle v, Road r) {
@@ -63,4 +74,8 @@ public class TrafficController {
         double stopDistPx = Math.max(4.0, Math.min(18.0, 0.15 * L)); // 4..18 px, ose 15% e gjatësisë
         return tl.isRedFor(r) && distToEnd < stopDistPx;
     }
+    
+    public int getCompletedCount() { return completed; }
+    public double getAvgWaitCompleted() { return completed == 0 ? 0.0 : totalWaitCompleted / completed; }
+
 }

@@ -56,6 +56,37 @@ public class TrafficSimulation {
                 controller.tick(dtMs / 1000.0, intersections, vehicles);
                 panel.repaint();
             }).start();	
+            
+         // pas krijimit të controller dhe panelit
+            JPanel controls = new JPanel(new FlowLayout(FlowLayout.LEFT));
+            controls.setBorder(BorderFactory.createEmptyBorder(6,6,6,6));
+
+            // Slider për shpejtësinë (0..80 px/s)
+            JLabel spLbl = new JLabel("Speed:");
+            JSlider speed = new JSlider(0, 80, 25);
+            speed.addChangeListener(e -> controller.setVehicleSpeed(speed.getValue()));
+            controls.add(spLbl);
+            controls.add(speed);
+
+            // Spinner për green duration (2..30 s)
+            JLabel gdLbl = new JLabel("  Green (s):");
+            SpinnerNumberModel model = new SpinnerNumberModel(8.0, 2.0, 30.0, 0.5);
+            JSpinner green = new JSpinner(model);
+            green.addChangeListener(e -> {
+                double val = ((Number)green.getValue()).doubleValue();
+                for (Intersection inter : intersections) {
+                    if (!inter.getTrafficLights().isEmpty()) {
+                        inter.getTrafficLights().get(0).setGreenDuration(val);
+                    }
+                }
+            });
+            controls.add(gdLbl);
+            controls.add(green);
+
+            // shtoje panelin e kontrolleve në NORTH
+            frame.add(controls, BorderLayout.NORTH);
+
         });
+        
     }
 }

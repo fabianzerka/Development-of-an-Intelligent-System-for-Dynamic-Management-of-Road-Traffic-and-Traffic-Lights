@@ -11,6 +11,8 @@ public class Vehicle {
     private double sOnEdge = 0.0;  // pozicioni (në piksele të hartës) përgjatë edge-it
     private double speed = 20.0;   // piksele / sek
     private final double depart;
+    private boolean finished = false;
+    private double finishedAt = -1;
     
     // metrikë
     private double waitingTime = 0.0;
@@ -59,4 +61,7 @@ public class Vehicle {
     // ==== metrikë ====
     public void addWaiting(double dt) { waitingTime += dt; }
     public double getWaitingTime() { return waitingTime; }
+    public void markFinished(double simTime) { this.finished = true; this.finishedAt = simTime; }
+    public boolean isFinished() { return finished; }
+    public double getFinishedAt() { return finishedAt; }
 }

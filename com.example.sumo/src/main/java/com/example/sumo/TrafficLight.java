@@ -1,119 +1,134 @@
 package com.example.sumo;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.HashSet;
+import java.util.Random;
+import java.util.Set;
 
 /**
- * Simple two-phase traffic light assigned to an {@link Intersection}. Incoming
- * roads are automatically split into two orthogonal groups (north–south and
- * east–west) and the light cycles between them with a fixed green duration.
+ * Two-phase traffic light bound to a single Intersection.
+ * Phase 0 serves group A of approaches (roughly E–W), phase 1 serves group B (N–S).
+ * Adaptive timing: min-green, gap-out, soft max. Initial phase is randomized
+ * per light to avoid global synchronization.
  */
 public class TrafficLight {
 
-    /** High level state used by the visualizer. */
     public enum State { GREEN, RED }
 
     private final String id;
-    private final Intersection inter;
+    private final Intersection intersection;
 
-    // Group 0 = horizontal, group 1 = vertical; populated from incoming roads
-    private final List<Road> group0 = new ArrayList<>();
-    private final List<Road> group1 = new ArrayList<>();
+    // Incoming edges split into two groups
+    private final Set<String> groupA = new HashSet<>();
+    private final Set<String> groupB = new HashSet<>();
 
-    private int phase = 0;           // 0 => group0 green, 1 => group1 green
-    private double timer = 0.0;
-    private double greenDur = 8.0;  // seconds
-    
-    /**
-     * Creates a traffic light for the given intersection and automatically
-     * populates road groups based on their orientation.
-     *
-     * @param id    light identifier
-     * @param inter target intersection
-     */
-    public TrafficLight(String id, Intersection inter) {
+    // 0 = A green, 1 = B green
+    private int phase;
+
+    // timers [s]
+    private double greenElapsed = 0.0;
+    private double minGreen     = 5.0;   // lower bound to avoid flicker
+    private double maxGreen     = 18.0;  // soft cap to prevent starvation
+
+    // small per-light jitter to desynchronize switching
+    private final double jitter; // 0..2s
+
+    public TrafficLight(String id, Intersection intersection) {
         this.id = id;
-        this.inter = inter;
-        autoGroupIncoming(inter);
+        this.intersection = intersection;
+        autoGroupIncoming();
+
+        Random rng = new Random(id.hashCode() ^ System.nanoTime());
+        this.phase  = rng.nextBoolean() ? 0 : 1;      // random start
+        this.jitter = 2.0 * rng.nextDouble();         // 0..2s
+        this.greenElapsed = rng.nextDouble() * (minGreen + jitter); // stagger start
     }
 
-    /** @return traffic light identifier */
-    public String getId() { return id; }
+    public String getId()         { return id; }
+    public Intersection getNode() { return intersection; }
+    public int getPhase()         { return phase; }
 
-    /** @return associated intersection */
-    public Intersection getIntersection() { return inter; }
+    /** Kept for compatibility: treat as min-green. */
+    public void setGreenDuration(double seconds) {
+        minGreen = Math.max(2.0, seconds);
+        maxGreen = Math.max(minGreen + 6.0, minGreen * 2.5);
+    }
+
+    public void setMinGreen(double s) { setGreenDuration(s); }
+    public void setMaxGreen(double s) { maxGreen = Math.max(minGreen + 1.0, s); }
+
+    /** 0 for group A, 1 for group B. */
+    public int groupOf(Road incoming) {
+        return groupA.contains(incoming.getId()) ? 0 : 1;
+    }
+
+    /** Green for this incoming road right now? */
+    public boolean isGreenFor(Road incoming) { return groupOf(incoming) == phase; }
+    public boolean isRedFor  (Road incoming) { return !isGreenFor(incoming); }
+
+    /** Single-dot state used by the visualizer (GREEN when phase==0). */
+    public State getState() { return (phase == 0) ? State.GREEN : State.RED; }
 
     /**
-     * Updates the current phase timer. Should be called once per simulation
-     * tick.
-     *
-     * @param dt elapsed time in seconds
+     * Adaptive decision:
+     *  - hold until minGreen+jitter
+     *  - if current side has demand and other side is lighter, extend up to maxGreen
+     *  - if opposite is heavier OR current has no demand, switch (once min met)
+     *  - hard switch at maxGreen
      */
-    public void update(double dt) {
-        if (group0.isEmpty() && group1.isEmpty()) return;
-        timer += dt;
-        if (timer >= greenDur) {
-            timer = 0.0;
+    public void updateAdaptive(double dt, int dA, int dB, double nowIgnored) {
+        greenElapsed += dt;
+
+        final double effMin = minGreen + jitter * 0.3; // small per-light offset
+        int curr = (phase == 0 ? dA : dB);
+        int oth  = (phase == 0 ? dB : dA);
+
+        // always respect effective min-green
+        if (greenElapsed < effMin) return;
+
+        boolean mustSwitch = false;
+
+        // gap-out: current side empty while opposite has cars
+        if (curr == 0 && oth > 0) mustSwitch = true;
+
+        // pressure-bias: if opposite queue is significantly larger, switch
+        if (!mustSwitch && oth >= curr + 3) mustSwitch = true; // needs 3+ more vehicles
+
+        // hard maximum
+        if (!mustSwitch && greenElapsed >= maxGreen) mustSwitch = true;
+
+        // otherwise, continue serving current queue (extend)
+        if (mustSwitch) {
             phase = 1 - phase;
+            greenElapsed = 0.0;
         }
     }
 
-    /**
-     * Checks if the given road has a green signal.
-     *
-     * @param incoming road approaching the intersection
-     * @return {@code true} if vehicles from that road may proceed
-     */
-    public boolean isGreenFor(Road incoming) {
-        if (incoming == null) return true;
-        if (group0.isEmpty() && group1.isEmpty()) return true;
-        return (phase == 0 ? group0 : group1).contains(incoming);
+    /** Legacy fixed update (unused by controller). */
+    public void update(double dt) {
+        greenElapsed += dt;
+        if (greenElapsed >= Math.max(2.0, minGreen)) {
+            phase = 1 - phase;
+            greenElapsed = 0.0;
+        }
     }
 
-    /** @return {@code true} if the road faces a red signal */
-    public boolean isRedFor(Road incoming) { return !isGreenFor(incoming); }
+    /* ---------- helpers ---------- */
 
-    /**
-     * Convenience state for the visualizer – reports green if any incoming road
-     * currently has a green light.
-     */
-    public State getState() {
-        if (inter == null || inter.getIncoming().isEmpty()) return State.GREEN;
-        for (Road r : inter.getIncoming()) if (isGreenFor(r)) return State.GREEN;
-        return State.RED;
-    }
-
-    // ==== Helpers for adaptation ====
-
-    /** @return group index (0/1) for the given road or -1 if not controlled */
-    public int groupOf(Road r) {
-        if (r == null) return -1;
-        if (group0.contains(r)) return 0;
-        if (group1.contains(r)) return 1;
-        return -1;
-    }    
-
-    /** @return current phase (0 or 1) */
-    public int getPhase() { return phase; }
-
-    /** Forces the traffic light into a specific phase and resets the timer. */
-    public void forcePhase(int p) { if (p == 0 || p == 1) { phase = p; timer = 0; } }
-
-    /** Sets the duration of the green phase for each group. */
-    public void setGreenDuration(double seconds) { if (seconds > 0) this.greenDur = seconds; }
-
-    // ==== Automatic grouping N–S / E–W based on road angle ====
-
-    /**
-     * Splits incoming roads into two groups based on their dominant axis. Roads
-     * with a larger horizontal component go to group 0; others go to group 1.
-     */
-    private void autoGroupIncoming(Intersection inter) {
-        if (inter == null) return;
-        for (Road r : inter.getIncoming()) {
-            double dx = r.getX2() - r.getX1();
-            double dy = r.getY2() - r.getY1();
-            if (Math.abs(dx) >= Math.abs(dy)) group0.add(r); else group1.add(r);
+    /** Split incoming edges into two orthogonal sets by approach vector. */
+    private void autoGroupIncoming() {
+        groupA.clear(); groupB.clear();
+        for (Road in : intersection.getIncoming()) {
+            double dx = intersection.getX() - in.getX1();
+            double dy = intersection.getY() - in.getY1();
+            if (Math.abs(dx) >= Math.abs(dy)) groupA.add(in.getId()); // approx E–W
+            else                               groupB.add(in.getId()); // approx N–S
+        }
+        if (groupA.isEmpty() || groupB.isEmpty()) {
+            groupA.clear(); groupB.clear();
+            int i = 0;
+            for (Road in : intersection.getIncoming()) {
+                ((i++ & 1) == 0 ? groupA : groupB).add(in.getId());
+            }
         }
     }
 }

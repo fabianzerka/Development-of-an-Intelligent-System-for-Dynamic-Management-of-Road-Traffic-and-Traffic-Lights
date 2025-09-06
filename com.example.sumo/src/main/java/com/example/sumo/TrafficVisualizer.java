@@ -20,7 +20,7 @@ public class TrafficVisualizer extends JPanel {
     private final Map<String, Road> roadById;
     private final TrafficController controller;
 
-    // kufijtë e botës (nga rrjeti)
+    // world bounds (computed from the network)
     private double minX, minY, maxX, maxY;
 
     // zoom & pan
@@ -32,11 +32,21 @@ public class TrafficVisualizer extends JPanel {
     private Point lastDrag = null;
 
     private static final int margin = 20;
-    private static final int QUEUE_WIN = 40; // px pranë semaforit për numërim radhe
+    private static final int QUEUE_WIN = 40; // px near the stop line
 
-    /**
-     * Creates a visualizer for the given network and controller.
-     */
+    // ---- Dark theme palette for the map ----
+    private static final Color MAP_BG        = new Color(0x1E222A);
+    private static final Color ROAD_SHADOW   = new Color(0, 0, 0, 90);
+    private static final Color ROAD_LINE     = new Color(140, 146, 160);
+    private static final Color NODE_FILL     = new Color(35, 40, 50);
+    private static final Color NODE_STROKE   = new Color(220, 225, 235, 110);
+    private static final Color VEHICLE_FILL  = new Color(43, 179, 243);
+    private static final Color QUEUE_BAR     = new Color(0, 209, 255, 180);
+    private static final Color LIGHT_GREEN   = new Color(58, 197, 105);
+    private static final Color LIGHT_RED     = new Color(232, 93, 117);
+    private static final Color OVERLAY_TEXT  = new Color(230, 234, 242, 210);
+
+    /** Creates a visualizer for the given network and controller. */
     public TrafficVisualizer(List<Road> roads,
                              List<Intersection> intersections,
                              List<Vehicle> vehicles,
@@ -48,7 +58,7 @@ public class TrafficVisualizer extends JPanel {
         this.roadById = roadById;
         this.controller = controller;
 
-        setBackground(Color.WHITE);
+        setBackground(MAP_BG);                     // dark background
         setPreferredSize(new Dimension(1000, 700));
         setDoubleBuffered(true);
 
@@ -110,7 +120,7 @@ public class TrafficVisualizer extends JPanel {
         maxScale = baseScale * 20.0;
     }
 
-    /* ===================  INTERAKSIONET  =================== */
+    /* ===================  INTERACTIONS  =================== */
 
     /** Wires up mouse listeners for zooming and panning interactions. */
     private void initInteractions() {
@@ -172,14 +182,25 @@ public class TrafficVisualizer extends JPanel {
     @Override
     protected void paintComponent(Graphics g0) {
         super.paintComponent(g0);
-        Graphics2D g = (Graphics2D) g0;
+        Graphics2D g = (Graphics2D) g0.create();
         g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
 
-        // rrugët (poliline)
-        g.setColor(Color.LIGHT_GRAY);
-        g.setStroke(new BasicStroke(2f));
+        // ---- Roads (shadow + main stroke) ----
         for (Road r : roads) {
             java.util.List<java.awt.geom.Point2D> pts = r.getShape();
+            if (pts.size() < 2) continue;
+
+            // shadow pass
+            g.setColor(ROAD_SHADOW);
+            g.setStroke(new BasicStroke(4f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+            for (int i = 0; i < pts.size() - 1; i++) {
+                Point a = worldToView(pts.get(i).getX(),   pts.get(i).getY());
+                Point b = worldToView(pts.get(i+1).getX(), pts.get(i+1).getY());
+                g.drawLine(a.x, a.y, b.x, b.y);
+            }
+            // main pass
+            g.setColor(ROAD_LINE);
+            g.setStroke(new BasicStroke(2.5f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
             for (int i = 0; i < pts.size() - 1; i++) {
                 Point a = worldToView(pts.get(i).getX(),   pts.get(i).getY());
                 Point b = worldToView(pts.get(i+1).getX(), pts.get(i+1).getY());
@@ -187,17 +208,28 @@ public class TrafficVisualizer extends JPanel {
             }
         }
 
-        // indikatorë semafori
+        // ---- Intersections + small light indicator with glow ----
         for (Intersection inter : intersections) {
+            Point p = worldToView(inter.getX(), inter.getY());
+
+            // junction dot
+            g.setColor(NODE_FILL);
+            g.fillOval(p.x - 3, p.y - 3, 6, 6);
+            g.setColor(NODE_STROKE);
+            g.drawOval(p.x - 3, p.y - 3, 6, 6);
+
+            // traffic light indicator (if any)
             if (!inter.getTrafficLights().isEmpty()) {
-                TrafficLight tl = inter.getTrafficLights().get(0);
-                Point p = worldToView(inter.getX(), inter.getY());
-                g.setColor(tl.getState() == TrafficLight.State.GREEN ? new Color(0,170,0) : new Color(200,40,40));
+                boolean green = inter.getTrafficLights().get(0).getState() == TrafficLight.State.GREEN;
+                Color c = green ? LIGHT_GREEN : LIGHT_RED;
+                g.setColor(new Color(c.getRed(), c.getGreen(), c.getBlue(), 90));   // glow
+                g.fillOval(p.x - 7, p.y - 15, 14, 14);
+                g.setColor(c);
                 g.fillOval(p.x - 4, p.y - 12, 8, 8);
             }
         }
 
-        // queue counts per edge for this frame
+        // ---- Compute queue counts for this frame ----
         Map<String, Integer> qMap = new HashMap<>();
         for (Vehicle v : vehicles) {
             Road cr = roadById.get(v.getCurrentEdge());
@@ -207,18 +239,19 @@ public class TrafficVisualizer extends JPanel {
             if (distToEnd <= QUEUE_WIN) qMap.merge(cr.getId(), 1, Integer::sum);
         }
 
-        // red bars representing waiting vehicles near lights
+        // ---- Queue bars near stop lines (teal segments) ----
         g.setStroke(new BasicStroke(6f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
-        g.setColor(new Color(220, 50, 50, 160));
+        g.setColor(QUEUE_BAR);
         for (Intersection inter : intersections) {
             for (Road r : inter.getIncoming()) {
                 int q = qMap.getOrDefault(r.getId(), 0);
                 if (q <= 0) continue;
 
                 double L = r.getLength();
-                double len = Math.min(8 + q * 5.0, Math.max(20.0, 0.25 * L));
+                double len = Math.min(8 + q * 5.0, Math.max(24.0, 0.25 * L));
                 java.awt.geom.Point2D pEnd = pointAlong(r, L);
                 java.awt.geom.Point2D pBeg = pointAlong(r, Math.max(0, L - len));
+                if (pEnd == null || pBeg == null) continue;
 
                 Point a = worldToView(pBeg.getX(), pBeg.getY());
                 Point b = worldToView(pEnd.getX(), pEnd.getY());
@@ -227,8 +260,7 @@ public class TrafficVisualizer extends JPanel {
         }
         g.setStroke(new BasicStroke(2f));
 
-        // vehicles
-        g.setColor(new Color(30,144,255));
+        // ---- Vehicles (cyan with tiny shadow) ----
         for (Vehicle v : vehicles) {
             Road r = roadById.get(v.getCurrentEdge());
             if (r == null) continue;
@@ -236,12 +268,14 @@ public class TrafficVisualizer extends JPanel {
             java.awt.geom.Point2D wp = pointAlong(r, t * r.getLength());
             if (wp != null) {
                 Point p = worldToView(wp.getX(), wp.getY());
+                g.setColor(new Color(0, 0, 0, 120));
+                g.fillRect(p.x - 3 + 1, p.y - 3 + 1, 6, 6);
+                g.setColor(VEHICLE_FILL);
                 g.fillRect(p.x - 3, p.y - 3, 6, 6);
             }
         }
 
-        // overlay information
-        g.setColor(new Color(0,0,0,140));
+        // ---- Overlay (shadow + light text) ----
         String info = "Intersections: " + intersections.size() +
                       " | Roads: " + roads.size() +
                       " | Active: " + vehicles.size();
@@ -249,7 +283,13 @@ public class TrafficVisualizer extends JPanel {
             info += " | Completed: " + controller.getCompletedCount() +
                     String.format(" | Avg wait(comp): %.1fs", controller.getAvgWaitCompleted());
         }
-        g.drawString(info, 10, getHeight() - 10);
+        int y = getHeight() - 10;
+        g.setColor(new Color(0, 0, 0, 160));
+        g.drawString(info, 11, y - 1);
+        g.setColor(OVERLAY_TEXT);
+        g.drawString(info, 10, y);
+
+        g.dispose();
     }
 
     /** Returns a point along the polyline of road {@code r} at distance {@code s}. */

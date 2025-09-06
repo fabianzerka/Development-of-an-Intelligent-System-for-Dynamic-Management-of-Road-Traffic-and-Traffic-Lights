@@ -3,108 +3,133 @@ package com.example.sumo.gui;
 import com.example.sumo.*;
 
 import javax.swing.*;
-import javax.swing.Timer;
-
 import java.awt.*;
 import java.nio.file.Path;
-import java.util.*;
-import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.*;
 
 /**
- * Entry point for launching the Swing based traffic simulation demo. The class
- * wires together network parsing, vehicle loading, controller logic and the
- * visualizer panel to create an interactive simulation.
+ * Entry point for the Swing-based traffic simulation demo.
+ * Wires readers, controller, visualizer, and a modern dark toolbar.
  */
 public class TrafficSimulation {
 
-    /** Starts the graphical simulation. */
     public static void main(String[] args){
         SwingUtilities.invokeLater(() -> {
+            // --- Dark UI defaults (UiKit) ---
+            UiKit.applyDarkDefaults();
+
             String base   = "src/main/resources/sumo_output/";
             String net    = base + "osm.net.xml";
             String routes = base + "routes.rou.xml";
 
-            // network
+            // 1) Network
             SumoNetworkReader.readNetwork(net);
             java.util.List<Intersection> intersections = new ArrayList<>(SumoNetworkReader.getIntersections());
             java.util.List<Road> roads = new ArrayList<>(SumoNetworkReader.getRoads());
             Map<String, Road> roadById = SumoNetworkReader.getRoadById();
 
-            // lights (1 per intersection)
+            // 2) Lights
             for (Intersection inter : intersections) {
                 TrafficLight tl = new TrafficLight("TL_" + inter.getId(), inter);
                 inter.addTrafficLight(tl);
             }
 
-            // vehicles
+            // 3) Vehicles
             java.util.List<Vehicle> vehicles = SumoVehiclesReader.readVehicles(routes);
-            // (optional) set start times 0
             for (Vehicle v : vehicles) v.setStartTime(0.0);
 
-            // controller + panel
+            // 4) Controller + panel
             TrafficController controller = new TrafficController(roadById);
             controller.setVehicleSpeed(25.0);
-
             TrafficVisualizer panel = new TrafficVisualizer(roads, intersections, vehicles, roadById, controller);
+            // Optional: dark map
+            // panel.setBackground(new Color(0x1E222A));
 
+            // 5) Frame
             JFrame frame = new JFrame("Traffic Simulation");
             frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
             frame.setLayout(new BorderLayout());
             frame.add(panel, BorderLayout.CENTER);
 
-            // --- Controls bar ---
-            JPanel controls = new JPanel(new FlowLayout(FlowLayout.LEFT));
-            controls.setBorder(BorderFactory.createEmptyBorder(6,6,6,6));
+            // ----- Modern top bar (UiKit) -----
+            JComponent top = UiKit.topBar();
+            JPanel left  = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 2));
+            JPanel right = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 2));
+            left.setOpaque(false);
+            right.setOpaque(false);
+            top.add(left, BorderLayout.WEST);
+            top.add(right, BorderLayout.EAST);
 
-            JButton playPause = new JButton("Pause");
+            // Play/Pause button
+            JButton playPause = UiKit.button("PAUSE", UiKit.pauseIcon(16), UiKit.BtnKind.PRIMARY);
+            left.add(playPause);
+
+            // Speed slider + badge
+            left.add(new JLabel("SIMULATION SPEED:") {{ setForeground(UiKit.FG_MUTED); }});
             JSlider speed = new JSlider(0, 80, 25);
-            JLabel speedLbl = new JLabel(" Speed:");
-            JLabel greenLbl = new JLabel("  Green (s):");
+            speed.setOpaque(false);
+            JLabel speedBadge = UiKit.badge("1.0x", UiKit.ACCENT_DARK);
+            left.add(speed);
+            left.add(speedBadge);
+
+            // Green spinner + badge
+            left.add(new JLabel(UiKit.lightIcon(16)));
             JSpinner green = new JSpinner(new SpinnerNumberModel(8.0, 2.0, 30.0, 0.5));
-            JButton exportCsv = new JButton("Export CSV");
+            ((JComponent) ((JSpinner.DefaultEditor) green.getEditor()).getComponent(0)).setOpaque(true);
+            left.add(green);
+            JLabel greenBadge = UiKit.badge("GREEN: 8", new Color(0x3A3F4B));
+            left.add(greenBadge);
 
-            controls.add(playPause);
-            controls.add(speedLbl);
-            controls.add(speed);
-            controls.add(greenLbl);
-            controls.add(green);
-            controls.add(exportCsv);
+            // Export button
+            JButton exportCsv = UiKit.button("EXPORT DATA (CSV)", UiKit.downloadIcon(16), UiKit.BtnKind.GHOST);
+            right.add(exportCsv);
 
-            frame.add(controls, BorderLayout.NORTH);
+            frame.add(top, BorderLayout.NORTH);
 
-            // --- Timer & wiring ---
+            // ----- Timer & wiring -----
             final int dtMs = 40;
-            final Timer[] holder = new Timer[1];
-            holder[0] = new javax.swing.Timer(dtMs, e -> {
+            final javax.swing.Timer simTimer = new javax.swing.Timer(dtMs, e -> {
                 controller.tick(dtMs / 1000.0, intersections, vehicles);
                 panel.repaint();
             });
-            holder[0].start();
+            simTimer.start();
 
-            // play/pause
+            // Play / Pause toggle
             playPause.addActionListener(ae -> {
-                if (holder[0].isRunning()) { holder[0].stop(); playPause.setText("Play"); }
-                else { holder[0].start(); playPause.setText("Pause"); }
+                if (simTimer.isRunning()) {
+                    simTimer.stop();
+                    playPause.setText("PLAY");
+                    playPause.setIcon(UiKit.playIcon(16));
+                } else {
+                    simTimer.start();
+                    playPause.setText("PAUSE");
+                    playPause.setIcon(UiKit.pauseIcon(16));
+                }
             });
 
-            // speed slider
-            speed.addChangeListener(e -> controller.setVehicleSpeed(speed.getValue()));
+            // Speed slider → controller speed + badge
+            speed.addChangeListener(e -> {
+                int v = speed.getValue();
+                controller.setVehicleSpeed(v);
+                double factor = Math.max(0.25, v / 25.0);
+                speedBadge.setText(String.format("%.1fx", factor));
+            });
 
-            // green duration spinner
+            // Green duration → all lights + badge
             green.addChangeListener(e -> {
-                double val = ((Number)green.getValue()).doubleValue();
+                double val = ((Number) green.getValue()).doubleValue();
                 for (Intersection inter : intersections) {
                     if (!inter.getTrafficLights().isEmpty()) {
                         inter.getTrafficLights().get(0).setGreenDuration(val);
                     }
                 }
+                greenBadge.setText("GREEN: " + (int)Math.round(val));
             });
 
-            // export CSV
+            // Export CSV
             exportCsv.addActionListener(ae -> {
                 try {
-                    // mund të vendosësh edhe një timestamp në emër nëse do
                     Path out = Paths.get("results", "metrics.csv");
                     CsvExporter.exportVehicleMetrics(out, controller.getFinishedVehiclesSnapshot());
                     JOptionPane.showMessageDialog(frame,
@@ -117,7 +142,7 @@ public class TrafficSimulation {
                             "Export CSV", JOptionPane.ERROR_MESSAGE);
                 }
             });
-            
+
             frame.pack();
             frame.setLocationRelativeTo(null);
             frame.setVisible(true);

@@ -36,14 +36,6 @@ public class TrafficController {
     public double getAvgWaitCompleted(){ return completed == 0 ? 0.0 : totalWaitCompleted / completed; }
     public List<Vehicle> getFinishedVehiclesSnapshot(){ return Collections.unmodifiableList(finishedVehicles); }
 
-    /** Reset metrics and clock (optional Reset button). */
-    public void reset() {
-        simTime = 0.0;
-        completed = 0;
-        totalWaitCompleted = 0.0;
-        finishedVehicles.clear();
-    }
-
     /* ================= main step ================= */
 
     public void tick(double dt, List<Intersection> intersections, List<Vehicle> vehicles) {

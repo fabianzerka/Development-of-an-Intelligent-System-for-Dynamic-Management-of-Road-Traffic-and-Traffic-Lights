@@ -52,7 +52,4 @@ public class Intersection {
 
     /** @return traffic lights controlling this intersection */
     public List<TrafficLight> getTrafficLights() { return Collections.unmodifiableList(trafficLights); }
-
-    // helper for potential green-wave algorithms in the future
-    public double getDistanceToPrevious(TrafficLight prev) { return 100.0; }
 }

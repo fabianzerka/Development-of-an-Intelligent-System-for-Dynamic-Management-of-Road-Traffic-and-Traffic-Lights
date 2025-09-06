@@ -103,15 +103,6 @@ public class TrafficLight {
         }
     }
 
-    /** Legacy fixed update (unused by controller). */
-    public void update(double dt) {
-        greenElapsed += dt;
-        if (greenElapsed >= Math.max(2.0, minGreen)) {
-            phase = 1 - phase;
-            greenElapsed = 0.0;
-        }
-    }
-
     /* ---------- helpers ---------- */
 
     /** Split incoming edges into two orthogonal sets by approach vector. */

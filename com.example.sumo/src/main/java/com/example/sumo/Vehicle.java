@@ -42,8 +42,8 @@ public class Vehicle {
     public String getId() { return id; }
 
     /** @return current edge id the vehicle occupies */
-    public String getCurrentEdge() { return routeEdges.get(edgeIndex); }
-
+    public String getCurrentEdge() { return edgeIndex < routeEdges.size() ? routeEdges.get(edgeIndex) : null; }
+    
     /** Sets the current speed in visual units per second. */
     public void setSpeed(double s) { if (s > 0) this.speed = s; }
 

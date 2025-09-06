@@ -38,11 +38,7 @@ public class SumoVehiclesReader {
                 if (edges == null || edges.trim().isEmpty()) continue;
 
                 String[] edgeIds = edges.trim().split("\\s+");
-
-                // Use an existing Vehicle constructor (no depart)
                 vehicles.add(new Vehicle(vid, edgeIds));
-                // If your Vehicle only has (String, List<String>), use:
-                // vehicles.add(new Vehicle(vid, Arrays.asList(edgeIds)));
             }
             System.out.println("Loaded vehicles: " + vehicles.size());
         } catch (Exception e) {

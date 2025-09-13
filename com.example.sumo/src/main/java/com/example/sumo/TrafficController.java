@@ -49,7 +49,7 @@ public class TrafficController {
             if (inter.getTrafficLights().isEmpty()) continue;
             TrafficLight tl = inter.getTrafficLights().get(0);
             int[] d = demand.getOrDefault(inter, new int[2]);
-            tl.updateAdaptive(dt, d[0], d[1], simTime);
+            tl.updateAdaptive(dt, d[0], d[1]);
         }
 
         // 2) move vehicles (stop on red near stop-line; then advance)

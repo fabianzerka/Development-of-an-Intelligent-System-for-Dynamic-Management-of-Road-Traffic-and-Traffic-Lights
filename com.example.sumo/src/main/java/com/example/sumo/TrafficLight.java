@@ -75,7 +75,7 @@ public class TrafficLight {
      *  - if opposite is heavier OR current has no demand, switch (once min met)
      *  - hard switch at maxGreen
      */
-    public void updateAdaptive(double dt, int dA, int dB, double nowIgnored) {
+    public void updateAdaptive(double dt, int dA, int dB) {
         greenElapsed += dt;
 
         final double effMin = minGreen + jitter * 0.3; // small per-light offset

@@ -45,12 +45,15 @@ public class TrafficController {
         Map<Intersection,int[]> demand = computeDemand(vehicles);
 
         // 1) adapt all signals locally
-        for (Intersection inter : intersections) {
-            if (inter.getTrafficLights().isEmpty()) continue;
-            TrafficLight tl = inter.getTrafficLights().get(0);
-            int[] d = demand.getOrDefault(inter, new int[2]);
-            tl.updateAdaptive(dt, d[0], d[1]);
-        }
+     // 0) (heqim computeDemand)
+
+     // 1) fixed-time for all signals
+     for (Intersection inter : intersections) {
+         if (inter.getTrafficLights().isEmpty()) continue;
+         TrafficLight tl = inter.getTrafficLights().get(0);
+         tl.updateFixed(dt);   // <-- thirrja e re
+     }
+
 
         // 2) move vehicles (stop on red near stop-line; then advance)
         Map<Vehicle, Double> prevPos = new IdentityHashMap<>();

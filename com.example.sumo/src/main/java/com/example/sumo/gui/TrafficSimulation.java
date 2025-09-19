@@ -18,7 +18,9 @@ public class TrafficSimulation {
 
             String base   = "src/main/resources/sumo_output/";
             String net    = base + "osm.net.xml";
-            String routes = base + "routes.rou.xml";
+//            String routes = base + "routes.rou.xml";
+            String routes = base + "lowDensity_routes.rou.xml";
+//            String routes = base + "routes_high.rou.xml";
 
             // Network
             SumoNetworkReader.readNetwork(net);
@@ -104,7 +106,7 @@ public class TrafficSimulation {
             // Export CSV
             exportCsv.addActionListener(ae -> {
                 try {
-                    Path out = Paths.get("results", "metrics.csv");
+                    Path out = Paths.get("results", "FixedTimeLowDensity_metrics.csv");
                     CsvExporter.exportVehicleMetrics(out, controller.getFinishedVehiclesSnapshot());
                     JOptionPane.showMessageDialog(frame,
                             "Metrics exported to:\n" + out.toAbsolutePath(),
